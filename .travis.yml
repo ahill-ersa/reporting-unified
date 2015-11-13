@@ -1,0 +1,16 @@
+language: python
+
+python: 3.4
+
+env:
+  - TOX_ENV=flake8
+
+install:
+  - pip install tox
+
+script:
+  - tox
+
+notifications:
+  slack:
+    secure: Qy7kvuUcf9n9mTfHc/JKakxbVQmDJ4gYBHuI7ccmDQyluh5b/v4Dml69IpLNq/Mg9Hf0A+i+MzoKB1sqrwMWREObAkU57okwy1HuhFuf7sWoLxDUQetS9/MG7Cw8oDKYdI3I1KsMWWVIoLRhcI4n9+oLeBxECxeMitAxLnv/xseSFP9MKbED/5DXvyNRLqc3OqZZ8wTnwU5dRv09CYK5mWT4/UVuKTYz5tfuLvEnkGl2zHsqOkHg/MNvGfnFfPoggnDjxsC+UvrdvAjIJC0CeL4o5v7oSzCPyS9iRWyCoMGTK+t6VfWBky2G4CWwOHpt7ZigZMyVNGf6qQYl8fuljoANYeh/AHJIO5lABowXZX3j6T0YLQIrSO+HzUpmdxkmf6bL1R9VoJUv53LTnqW/Igffkrx+IC3pBqb+PwWZauKwDsPs7xxeQ3RxgNFqvPYlNw9uDzxMzO9MEMlKuehK3sUGVaVuurPuECvKDBj9+lLmw0GevW9E9ifIwXu70O6NbWoGkLSMECH233coGQ14+1p6pjAWxr0AK1/DfVqYcp6tduAyPFTu6SdVknUyBn2tthcGR8iIsNfE+YgkzZTBsyR60zfUG5ua8K4t6BpcWQLv3ekKZF92YHmrJEdA5XVH8UZRoqaqZjjXljaI+4vNkYrmV/yz/OwXwqrry9y7amk=
