@@ -140,7 +140,7 @@ class UsageResource(QueryResource):
         """Ingest usage."""
 
         @lru_cache(maxsize=10000)
-        def get_or_create_cache(model, **kwargs):
+        def cache(model, **kwargs):
             return get_or_create(model, **kwargs)
 
         args = INPUT_PARSER.parse_args()
@@ -152,20 +152,19 @@ class UsageResource(QueryResource):
             for message in request.json:
                 data = message["data"]
 
-                host = get_or_create_cache(Host, name=data["hostname"])
-                snapshot = get_or_create_cache(Snapshot,
-                                               ts=data["timestamp"],
-                                               host=host,
-                                               message=message["id"])
+                host = cache(Host, name=data["hostname"])
+                snapshot = cache(Snapshot,
+                                 ts=data["timestamp"],
+                                 host=host,
+                                 message=message["id"])
 
                 for entry in data["filesystems"]:
-                    filesystem = get_or_create_cache(Filesystem,
-                                                     name=entry["filesystem"],
-                                                     host=host)
+                    filesystem = cache(Filesystem,
+                                       name=entry["filesystem"],
+                                       host=host)
 
                     for record in entry["quota"]:
-                        owner = get_or_create_cache(Owner,
-                                                    name=record["username"])
+                        owner = cache(Owner, name=record["username"])
 
                         if ingest_pass == 2:
                             columns = [
