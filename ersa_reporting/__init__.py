@@ -116,6 +116,11 @@ def add(item):
     db.session.add(item)
 
 
+def delete(item):
+    """Delete object."""
+    db.session.delete(item)
+
+
 def flush():
     """Flush session."""
     db.session.flush()
