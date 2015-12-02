@@ -4,6 +4,7 @@
 # pylint: disable=no-init, too-few-public-methods, no-self-use
 
 import os
+import re
 import sys
 import uuid
 
@@ -31,6 +32,8 @@ QUERY_PARSER.add_argument("count",
 
 INPUT_PARSER = reqparse.RequestParser()
 INPUT_PARSER.add_argument("name", location="args", required=True)
+
+STRIP_ID = re.compile("_id$")
 
 REQUIRED_ENVIRONMENT = ["ERSA_BIND", "ERSA_AUTH_TOKEN", "ERSA_DATABASE_URI"]
 
@@ -149,6 +152,16 @@ def id_column():
     return db.Column(UUID,
                      server_default=text("uuid_generate_v4()"),
                      primary_key=True)
+
+
+def to_dict(object, fields):
+    """Generate dictionary with specified fields."""
+    output = {}
+    fields = set(["id"] + (fields if fields is not None else []))
+    for name in fields:
+        if hasattr(object, name):
+            output[STRIP_ID.sub("", name)] = getattr(object, name)
+    return output
 
 
 def dynamic_query(model, query, expression):
