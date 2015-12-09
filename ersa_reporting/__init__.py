@@ -24,6 +24,7 @@ from sqlalchemy.orm.relationships import RelationshipProperty
 
 QUERY_PARSER = reqparse.RequestParser()
 QUERY_PARSER.add_argument("filter", action="append", help="Filter")
+QUERY_PARSER.add_argument("order", help="Ordering", default="id")
 QUERY_PARSER.add_argument("page", type=int, default=1, help="Page #")
 QUERY_PARSER.add_argument("count",
                           type=int,
@@ -189,13 +190,34 @@ def dynamic_query(model, query, expression):
     return query.filter(query_filter)
 
 
-def _do_query(model):
+def name_or_id(model, name):
+    """Return an _id attribute if one exists."""
+    name_id = name + "_id"
+    if hasattr(model, name_id):
+        return getattr(model, name_id)
+    elif hasattr(model, name):
+        return getattr(model, name)
+    else:
+        return None
+
+
+def do_query(model):
+    """Perform a query with request-specified filtering and ordering."""
     args = QUERY_PARSER.parse_args()
     query = model.query
+    # filter
     if args["filter"]:
         for query_filter in args["filter"]:
             query = dynamic_query(model, query, query_filter)
-    query = query.order_by("id")
+    # order
+    order = []
+    for order_spec in args["order"].split(","):
+        if not order_spec.startswith("-"):
+            order.append(name_or_id(model, order_spec))
+        else:
+            order.append(name_or_id(model, order_spec[1:]).desc())
+    query = query.order_by(*order)
+    # execute
     return [item.json()
             for item in query.paginate(args["page"],
                                        per_page=args["count"]).items]
@@ -207,7 +229,7 @@ class QueryResource(Resource):
     @require_auth
     def get(self):
         """Query"""
-        return _do_query(self.query_class)
+        return do_query(self.query_class)
 
     @require_auth
     def post(self):
