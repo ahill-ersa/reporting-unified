@@ -171,7 +171,7 @@ def dynamic_query(model, query, expression):
     For example:
         foo.eq.42
     """
-    key, op, value = expression.split(".", 3)
+    key, op, value = expression.split(".", 2)
     column = getattr(model, key, None)
     if isinstance(column.property, RelationshipProperty):
         column = getattr(model, key + "_id", None)
