@@ -8,8 +8,10 @@ from functools import lru_cache
 
 from sqlalchemy.dialects.postgresql import INET, MACADDR
 
-from ersa_reporting import db, id_column, configure, get_or_create, commit, app
-from ersa_reporting import add, delete, request, require_auth, QueryResource
+from ersa_reporting import db, id_column, configure
+from ersa_reporting import get_or_create, commit, app
+from ersa_reporting import add, delete, request, require_auth
+from ersa_reporting import Resource, QueryResource, record_input
 
 # Data Models
 
@@ -279,6 +281,8 @@ class SnapshotResource(QueryResource):
     """Snapshot Endpoint"""
     query_class = Snapshot
 
+
+class IngestResource(Resource):
     @require_auth
     def put(self):
         """Ingest data."""
@@ -287,6 +291,8 @@ class SnapshotResource(QueryResource):
         def cache(model, **kwargs):
             return get_or_create(model, **kwargs)
 
+        record_input()
+        
         for message in request.json:
             data = message["data"]
 
@@ -445,7 +451,8 @@ def setup():
         "/ip": IPAddressResource,
         "/mac": MACAddressResource,
         "/ip/mapping": IPAddressMappingResource,
-        "/mac/mapping": MACAddressMappingResource
+        "/mac/mapping": MACAddressMappingResource,
+        "/ingest": IngestResource
     }
 
     configure(resources)

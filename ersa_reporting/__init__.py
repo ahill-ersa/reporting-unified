@@ -223,6 +223,12 @@ def do_query(model):
                                        per_page=args["count"]).items]
 
 
+def record_input():
+    """Record the name of an ingestion."""
+    args = INPUT_PARSER.parse_args()
+    add(Input(name=args["name"]))
+
+
 class QueryResource(Resource):
     """Generic Query"""
 
@@ -253,8 +259,7 @@ class InputResource(QueryResource):
     @require_auth
     def put(self):
         """Record a processed input."""
-        args = INPUT_PARSER.parse_args()
-        get_or_create(Input, name=args["name"])
+        record_input()
         commit()
         return "", 204
 

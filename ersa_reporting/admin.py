@@ -129,8 +129,8 @@ class EntityNameMapping(db.Model):
 
     def json(self):
         """JSON"""
-        return to_dict(self, ["entity_id", "name_id", "start_time", "end_time"
-                              ])
+        return to_dict(self, ["entity_id", "name_id", "start_time",
+                              "end_time"])
 
 
 class EntityIntegerAttributeMapping(db.Model):

@@ -6,8 +6,9 @@
 
 from sqlalchemy.dialects.postgresql import UUID
 
-from ersa_reporting import app, db, id_column, configure, get_or_create, commit
-from ersa_reporting import add, request, require_auth, QueryResource
+from ersa_reporting import app, db, add, id_column, configure, commit
+from ersa_reporting import get_or_create, record_input
+from ersa_reporting import request, require_auth, Resource, QueryResource
 
 # Data Models
 
@@ -16,7 +17,6 @@ class Snapshot(db.Model):
     """Snapshot Data Model"""
     id = id_column()
     ts = db.Column(db.Integer, nullable=False)
-    message = db.Column(UUID, nullable=False, unique=True)
 
     person_email = db.relationship("PersonEmail", backref="snapshot")
     person_username = db.relationship("PersonUsername", backref="snapshot")
@@ -24,7 +24,7 @@ class Snapshot(db.Model):
 
     def json(self):
         """Jsonify"""
-        return {"id": self.id, "ts": self.ts, "message": self.message}
+        return {"id": self.id, "ts": self.ts}
 
 
 class Organisation(db.Model):
@@ -142,20 +142,23 @@ class SnapshotResource(QueryResource):
     """Snapshot Endpoint"""
     query_class = Snapshot
 
+
+class IngestResource(Resource):
     @require_auth
     def put(self):
         """Ingest snapshots."""
 
+        record_input()
+
         for message in request.json:
             data = message["data"]
 
-            snapshot = Snapshot(ts=data["timestamp"], message=message["id"])
+            snapshot = Snapshot(ts=data["timestamp"])
             add(snapshot)
 
             for entry in data["organisations"]:
-                organisation = get_or_create(
-                    Organisation,
-                    insightly_id=entry["id"])
+                organisation = get_or_create(Organisation,
+                                             insightly_id=entry["id"])
                 organisation.name = entry["name"]
 
             for entry in data["contacts"]:
@@ -181,9 +184,8 @@ class SnapshotResource(QueryResource):
 
                 if entry["organisations"]:
                     for insightly_id in entry["organisations"]:
-                        organisation = get_or_create(
-                            Organisation,
-                            insightly_id=insightly_id)
+                        organisation = get_or_create(Organisation,
+                                                     insightly_id=insightly_id)
                         get_or_create(Membership,
                                       snapshot=snapshot,
                                       organisation=organisation,
@@ -240,7 +242,8 @@ def setup():
         "/username": UsernameResource,
         "/person-username": PersonUsernameResource,
         "/organisation": OrganisationResource,
-        "/membership": MembershipResource
+        "/membership": MembershipResource,
+        "/ingest": IngestResource
     }
 
     configure(resources)

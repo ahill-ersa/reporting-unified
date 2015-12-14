@@ -14,9 +14,9 @@ from sqlalchemy import UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 
 from ersa_reporting import app, db, id_column, configure
-from ersa_reporting import get, get_or_create, commit, Input
-from ersa_reporting import add, request, require_auth
-from ersa_reporting import QueryResource, INPUT_PARSER
+from ersa_reporting import get_or_create, commit, record_input
+from ersa_reporting import get, add, request, require_auth
+from ersa_reporting import Resource, QueryResource
 
 # Data Models
 
@@ -135,6 +135,8 @@ class UsageResource(QueryResource):
     """Usage Endpoint"""
     query_class = Usage
 
+
+class IngestResource(Resource):
     @require_auth
     def put(self):
         """Ingest usage."""
@@ -143,10 +145,9 @@ class UsageResource(QueryResource):
         def cache(model, **kwargs):
             return get_or_create(model, **kwargs)
 
-        args = INPUT_PARSER.parse_args()
-        # TODO: REGISTER INPUT HERE
-
         tsv = io.StringIO()
+
+        record_input()
 
         for ingest_pass in [1, 2]:
             for message in request.json:
@@ -194,7 +195,8 @@ def setup():
         "/host": HostResource,
         "/filesystem": FilesystemResource,
         "/owner": OwnerResource,
-        "/usage": UsageResource
+        "/usage": UsageResource,
+        "/ingest": IngestResource
     }
 
     configure(resources)

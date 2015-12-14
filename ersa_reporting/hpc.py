@@ -4,8 +4,9 @@
 # pylint: disable=no-member, import-error, no-init, too-few-public-methods
 # pylint: disable=cyclic-import, no-name-in-module, invalid-name
 
-from ersa_reporting import db, id_column, configure, get_or_create, commit
-from ersa_reporting import app, request, require_auth, QueryResource
+from ersa_reporting import db, id_column, configure, get_or_create
+from ersa_reporting import record_input, commit, app, request
+from ersa_reporting import require_auth, Resource, QueryResource
 
 # Data Models
 
@@ -114,10 +115,16 @@ class JobResource(QueryResource):
     """HPC Job"""
     query_class = Job
 
+
+class IngestResource(Resource):
     @require_auth
     def put(self):
         """Ingest jobs."""
-        messages = [message for message in request.json
+
+        record_input()
+
+        messages = [message
+                    for message in request.json
                     if message["data"]["state"] == "exited"]
 
         for message in messages:
@@ -137,10 +144,7 @@ class JobResource(QueryResource):
 
             for hostname, slots in data["exec_host"].items():
                 host = get_or_create(Host, name=hostname)
-                get_or_create(Allocation,
-                              job=job,
-                              host=host,
-                              cores=len(slots))
+                get_or_create(Allocation, job=job, host=host, cores=len(slots))
                 total_cores += len(slots)
 
             job.cores = total_cores
@@ -159,7 +163,8 @@ def setup():
         "/queue": QueueResource,
         "/owner": OwnerResource,
         "/job": JobResource,
-        "/allocation": AllocationResource
+        "/allocation": AllocationResource,
+        "/ingest": IngestResource
     }
 
     configure(resources)
