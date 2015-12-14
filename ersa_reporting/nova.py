@@ -292,7 +292,7 @@ class IngestResource(Resource):
             return get_or_create(model, **kwargs)
 
         record_input()
-        
+
         for message in request.json:
             data = message["data"]
 
