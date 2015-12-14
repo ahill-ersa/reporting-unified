@@ -6,8 +6,9 @@
 
 from functools import lru_cache
 
-from ersa_reporting import db, id_column, configure, get_or_create, commit
-from ersa_reporting import app, request, require_auth, QueryResource
+from ersa_reporting import db, id_column, configure, get_or_create
+from ersa_reporting import record_input, commit, app, request
+from ersa_reporting import require_auth, Resource, QueryResource
 
 
 def get_domain(name):
@@ -175,6 +176,8 @@ class SnapshotResource(QueryResource):
     """Snapshot"""
     query_class = Snapshot
 
+
+class IngestResource(Resource):
     @require_auth
     def put(self):
         """Ingest data."""
@@ -182,6 +185,8 @@ class SnapshotResource(QueryResource):
         @lru_cache(maxsize=10000)
         def cache(model, **kwargs):
             return get_or_create(model, **kwargs)
+
+        record_input()
 
         for message in request.json:
             data = message["data"]
@@ -242,7 +247,8 @@ def setup():
         "/membership": MembershipResource,
         "/reference": AccountReferenceResource,
         "/mapping": AccountReferenceMappingResource,
-        "/snapshot": SnapshotResource
+        "/snapshot": SnapshotResource,
+        "/ingest": IngestResource
     }
 
     configure(resources)

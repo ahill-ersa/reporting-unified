@@ -1,0 +1,122 @@
+#!/usr/bin/env python3
+
+# pylint: disable=C0111,W0212,W0611,E1102,W0703
+
+"""
+Prototype Ingestion Tool
+
+Plenty of rough edges.
+"""
+
+import base64
+import hashlib
+import json
+import lzma
+import os
+import random
+import sys
+
+from functools import partial
+from multiprocessing import Pool
+
+import requests
+
+from boto.s3.connection import S3Connection
+
+# HCP #facepalm
+import ssl
+if hasattr(ssl, '_create_unverified_context'):
+    ssl._create_default_https_context = ssl._create_unverified_context
+
+
+class HCP:
+    def __init__(self, aws_id, aws_secret, server, bucket):
+        aws_id = base64.b64encode(bytes(aws_id, "utf-8")).decode()
+        aws_secret = hashlib.md5(bytes(aws_secret, "utf-8")).hexdigest()
+        hs3 = S3Connection(aws_access_key_id=aws_id,
+                           aws_secret_access_key=aws_secret,
+                           host=server)
+        self.bucket = hs3.get_bucket(bucket)
+
+    def exists(self, name):
+        return name in self.bucket
+
+    def put(self, name, data):
+        self.bucket.new_key(name).set_contents_from_string(data)
+
+    def get(self, name):
+        return self.bucket.get_key(name,
+                                   validate=False).get_contents_as_string()
+
+    def items(self, prefix=None):
+        return self.bucket.list(prefix=prefix)
+
+
+def fetch(hcp, name):
+    return json.loads(lzma.decompress(hcp.get(name)).decode("utf-8"))
+
+
+def list_existing(endpoint, token):
+    page = 1
+    names = []
+
+    while True:
+        url = "%s/input?page=%s" % (endpoint, page)
+        batch = requests.get(url, headers={"x-ersa-auth-token": token})
+        if batch.status_code == 404:
+            break
+        elif batch.status_code != 200:
+            raise IOError("HTTP %s" % batch.status_code)
+
+        names += [item["name"] for item in batch.json()]
+        page += 1
+
+    return names
+
+
+def ingest(hcp, endpoint, token, prefix=None, substring=None, schema=None):
+    processed = set(list_existing(endpoint, token))
+
+    all_items = [item.name
+                 for item in hcp.items(prefix=prefix)
+                 if not item.name.endswith("/")]
+
+    if substring:
+        all_items = [item for item in all_items if substring in item]
+
+    all_items = set(all_items)
+
+    todo = list(all_items - processed)
+    random.shuffle(todo)
+
+    print("%s objects, %s already processed, %s todo" %
+          (len(all_items), len(processed.intersection(all_items)), len(todo)))
+
+    for name in todo:
+        print(name)
+        data = fetch(hcp, name)
+        if schema:
+            data = [item for item in data if item["schema"] == schema]
+        upload = requests.put("%s/ingest?name=%s" % (endpoint, name),
+                              headers={
+                                  "content-type": "application/json",
+                                  "x-ersa-auth-token": token
+                              },
+                              data=json.dumps(data))
+        if upload.status_code != 204:
+            print("error!", upload)
+            return
+
+
+if __name__ == "__main__":
+    endpoint = os.environ["REPORTING_ENDPOINT"]
+    token = os.environ["REPORTING_TOKEN"]
+    schema = os.getenv("REPORTING_SCHEMA")
+
+    hcp = HCP(os.environ["HCP_ID"], os.environ["HCP_SECRET"],
+              os.environ["HCP_ENDPOINT"], os.environ["HCP_BUCKET"])
+
+    prefix = os.getenv("HCP_PREFIX")
+    substring = os.getenv("HCP_SUBSTRING")
+
+    ingest(hcp, endpoint, token, prefix, substring, schema)
