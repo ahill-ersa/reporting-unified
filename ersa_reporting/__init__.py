@@ -228,9 +228,7 @@ def do_query(model):
             order.append(name_or_id(model, order_spec[1:]).desc())
     query = query.order_by(*order)
     # execute
-    return [item
-            for item in query.paginate(args["page"],
-                                       per_page=args["count"]).items]
+    return query.paginate(args["page"], per_page=args["count"]).items
 
 
 def record_input():
