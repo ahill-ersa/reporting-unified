@@ -6,6 +6,7 @@
 
 from ersa_reporting import app, db, configure, get_or_create, commit, to_dict
 from ersa_reporting import request, id_column, require_auth, QueryResource
+from ersa_reporting import fetch, delete, rollback
 
 # Data Models
 
@@ -227,8 +228,16 @@ class AdminResource(QueryResource):
                 self.ingest(item)
             commit()
             return "", 204
-        except:
-            return "", 400
+        except Exception as e:
+            rollback()
+            return str(e), 400
+
+    @require_auth
+    def delete(self):
+        for item in self.get_raw():
+            delete(item)
+        commit()
+        return "", 204
 
 
 class EntityTypeResource(AdminResource):
@@ -284,9 +293,9 @@ def setup():
 
     resources = {
         "/entity": EntityResource,
-        "/type": EntityTypeResource,
-        "/name": EntityNameResource,
-        "/relationship": EntityRelationshipResource,
+        "/entity/type": EntityTypeResource,
+        "/entity/name": EntityNameResource,
+        "/entity/relationship": EntityRelationshipResource,
         "/attribute/integer": EntityIntegerAttributeResource,
         "/attribute/float": EntityFloatAttributeResource,
         "/attribute/string": EntityStringAttributeResource,

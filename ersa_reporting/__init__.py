@@ -106,13 +106,18 @@ def get_or_create(model, **kwargs):
 
 
 def get(model, **kwargs):
-    """Fetch object."""
+    """Fetch object by query parameters."""
     return db.session.query(model).filter_by(**kwargs).first()
 
 
 def commit():
     """Commit session."""
     db.session.commit()
+
+
+def rollback():
+    """Rollback session."""
+    db.session.rollback()
 
 
 def add(item):
@@ -123,6 +128,11 @@ def add(item):
 def delete(item):
     """Delete object."""
     db.session.delete(item)
+
+
+def fetch(model, key):
+    """Fetch by ID."""
+    return db.session.query(model).get(key)
 
 
 def flush():
@@ -218,7 +228,7 @@ def do_query(model):
             order.append(name_or_id(model, order_spec[1:]).desc())
     query = query.order_by(*order)
     # execute
-    return [item.json()
+    return [item
             for item in query.paginate(args["page"],
                                        per_page=args["count"]).items]
 
@@ -232,10 +242,14 @@ def record_input():
 class QueryResource(Resource):
     """Generic Query"""
 
+    def get_raw(self):
+        """Query"""
+        return do_query(self.query_class)
+
     @require_auth
     def get(self):
         """Query"""
-        return do_query(self.query_class)
+        return [item.json() for item in self.get_raw()]
 
     @require_auth
     def post(self):
