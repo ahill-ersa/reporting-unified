@@ -208,7 +208,7 @@ class EntityRelationshipMapping(db.Model):
 # Endpoints
 
 
-class AdminResource(QueryResource):
+class BusinessResource(QueryResource):
     def ingest(self, item):
         obj = get_or_create(self.query_class, id=item["id"])
         for key, value in item.items():
@@ -240,51 +240,51 @@ class AdminResource(QueryResource):
         return "", 204
 
 
-class EntityTypeResource(AdminResource):
+class EntityTypeResource(BusinessResource):
     query_class = EntityType
 
 
-class EntityNameResource(AdminResource):
+class EntityNameResource(BusinessResource):
     query_class = EntityName
 
 
-class EntityRelationshipResource(AdminResource):
+class EntityRelationshipResource(BusinessResource):
     query_class = EntityRelationship
 
 
-class EntityIntegerAttributeResource(AdminResource):
+class EntityIntegerAttributeResource(BusinessResource):
     query_class = EntityIntegerAttribute
 
 
-class EntityFloatAttributeResource(AdminResource):
+class EntityFloatAttributeResource(BusinessResource):
     query_class = EntityFloatAttribute
 
 
-class EntityStringAttributeResource(AdminResource):
+class EntityStringAttributeResource(BusinessResource):
     query_class = EntityStringAttribute
 
 
-class EntityResource(AdminResource):
+class EntityResource(BusinessResource):
     query_class = Entity
 
 
-class EntityNameMappingResource(AdminResource):
+class EntityNameMappingResource(BusinessResource):
     query_class = EntityNameMapping
 
 
-class EntityIntegerAttributeMappingResource(AdminResource):
+class EntityIntegerAttributeMappingResource(BusinessResource):
     query_class = EntityIntegerAttributeMapping
 
 
-class EntityFloatAttributeMappingResource(AdminResource):
+class EntityFloatAttributeMappingResource(BusinessResource):
     query_class = EntityFloatAttributeMapping
 
 
-class EntityStringAttributeMappingResource(AdminResource):
+class EntityStringAttributeMappingResource(BusinessResource):
     query_class = EntityStringAttributeMapping
 
 
-class EntityRelationshipMappingResource(AdminResource):
+class EntityRelationshipMappingResource(BusinessResource):
     query_class = EntityRelationshipMapping
 
 
