@@ -151,7 +151,8 @@ def require_auth(func):
     def decorated(*args, **kwargs):
         """Check the header."""
         token = str(uuid.UUID(request.headers.get("x-ersa-auth-token", "")))
-        auth_response = requests.get("https://reporting.ersa.edu.au/auth?secret=%s" % token)
+        auth_response = requests.get(
+            "https://reporting.ersa.edu.au/auth?secret=%s" % token)
         if auth_response.status_code != 200:
             return "", 403
         else:
