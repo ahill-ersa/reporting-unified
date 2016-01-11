@@ -3,4 +3,4 @@ flask-cors
 flask-restful
 flask-sqlalchemy
 psycopg2
-streql
+requests
