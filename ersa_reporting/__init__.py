@@ -10,7 +10,7 @@ import uuid
 
 from functools import wraps
 
-import streql
+import requests
 
 from flask import Flask, request
 from flask.ext import restful
@@ -34,9 +34,11 @@ QUERY_PARSER.add_argument("count",
 INPUT_PARSER = reqparse.RequestParser()
 INPUT_PARSER.add_argument("name", location="args", required=True)
 
+PACKAGE = os.environ["ERSA_REPORTING_PACKAGE"]
+
 STRIP_ID = re.compile("_id$")
 
-REQUIRED_ENVIRONMENT = ["ERSA_BIND", "ERSA_AUTH_TOKEN", "ERSA_DATABASE_URI"]
+REQUIRED_ENVIRONMENT = ["ERSA_BIND", "ERSA_DATABASE_URI"]
 
 UUID_NAMESPACE = uuid.UUID("aeb7cf1c-a842-4592-82e9-55d2dad00150")
 
@@ -142,18 +144,22 @@ def flush():
 
 def require_auth(func):
     """
-    Very simple authentication via a configured token in the
-    HTTP header. Not intended for production.
+    Authenticate via the external reporting-auth service.
     """
 
     @wraps(func)
     def decorated(*args, **kwargs):
         """Check the header."""
-        token = request.headers.get("x-ersa-auth-token", "")
-        if streql.equals(token, app.config["ERSA_AUTH_TOKEN"]):
-            return func(*args, **kwargs)
+        token = str(uuid.UUID(request.headers.get("x-ersa-auth-token", "")))
+        auth_response = requests.get("https://reporting.ersa.edu.au/auth?secret=%s" % token)
+        if auth_response.status_code != 200:
+            return "", 403
         else:
-            return "", 401
+            auth_data = auth_response.json()
+            for endpoint in auth_data["endpoints"]:
+                if endpoint["name"] == PACKAGE:
+                    return func(*args, **kwargs)
+            return "", 403
 
     return decorated
 
@@ -292,6 +298,5 @@ def configure(resources):
         restapi.add_resource(cls, endpoint)
 
 
-app.config["ERSA_AUTH_TOKEN"] = os.environ["ERSA_AUTH_TOKEN"]
 app.config["SQLALCHEMY_DATABASE_URI"] = os.environ["ERSA_DATABASE_URI"]
 app.config["DEBUG"] = os.getenv("ERSA_DEBUG", "").lower() == "true"
