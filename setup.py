@@ -7,8 +7,8 @@ import glob
 from setuptools import setup
 
 setup(name="ersa-reporting",
-      version="1.2.0",
+      version="1.2.1",
       install_requires=["flask>=0.10.1", "flask-restful", "flask-cors",
-                        "flask-sqlalchemy", "psycopg2", "streql"],
+                        "flask-sqlalchemy", "psycopg2", "requests"],
       packages=["ersa_reporting"],
       scripts=glob.glob("bin/ersa-reporting-*"))
