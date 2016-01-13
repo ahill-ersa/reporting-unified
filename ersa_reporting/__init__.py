@@ -150,16 +150,20 @@ def require_auth(func):
     @wraps(func)
     def decorated(*args, **kwargs):
         """Check the header."""
-        token = str(uuid.UUID(request.headers.get("x-ersa-auth-token", "")))
-        auth_response = requests.get(
-            "https://reporting.ersa.edu.au/auth?secret=%s" % token)
-        if auth_response.status_code != 200:
-            return "", 403
-        else:
-            auth_data = auth_response.json()
-            for endpoint in auth_data["endpoints"]:
-                if endpoint["name"] == PACKAGE:
-                    return func(*args, **kwargs)
+        try:
+            token = str(uuid.UUID(request.headers.get("x-ersa-auth-token",
+                                                      "")))
+            auth_response = requests.get(
+                "https://reporting.ersa.edu.au/auth?secret=%s" % token)
+            if auth_response.status_code != 200:
+                return "", 403
+            else:
+                auth_data = auth_response.json()
+                for endpoint in auth_data["endpoints"]:
+                    if endpoint["name"] == PACKAGE:
+                        return func(*args, **kwargs)
+                return "", 403
+        except:
             return "", 403
 
     return decorated
