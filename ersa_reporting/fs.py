@@ -78,7 +78,7 @@ class Filesystem(db.Model):
 
     def json(self):
         """JSON"""
-        return to_dict(self, ["name", "host"])
+        return to_dict(self, ["name", "host_id"])
 
 
 class Usage(db.Model):
