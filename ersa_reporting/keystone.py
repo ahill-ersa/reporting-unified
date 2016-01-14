@@ -9,6 +9,7 @@ from functools import lru_cache
 from ersa_reporting import db, id_column, configure, get_or_create
 from ersa_reporting import record_input, commit, app, request
 from ersa_reporting import require_auth, Resource, QueryResource
+from ersa_reporting import BaseIngestResource
 
 
 def get_domain(name):
@@ -177,18 +178,15 @@ class SnapshotResource(QueryResource):
     query_class = Snapshot
 
 
-class IngestResource(Resource):
-    @require_auth
-    def put(self):
+class IngestResource(BaseIngestResource):
+    def ingest(self):
         """Ingest data."""
 
         @lru_cache(maxsize=10000)
         def cache(model, **kwargs):
             return get_or_create(model, **kwargs)
 
-        record_input()
-
-        for message in request.json:
+        for message in request.get_json(force=True):
             data = message["data"]
 
             snapshot = cache(Snapshot, ts=data["timestamp"])

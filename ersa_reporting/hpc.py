@@ -7,6 +7,7 @@
 from ersa_reporting import db, id_column, configure, get_or_create
 from ersa_reporting import record_input, commit, app, request
 from ersa_reporting import require_auth, Resource, QueryResource
+from ersa_reporting import BaseIngestResource
 
 # Data Models
 
@@ -116,15 +117,12 @@ class JobResource(QueryResource):
     query_class = Job
 
 
-class IngestResource(Resource):
-    @require_auth
-    def put(self):
+class IngestResource(BaseIngestResource):
+    def ingest(self):
         """Ingest jobs."""
 
-        record_input()
-
         messages = [message
-                    for message in request.json
+                    for message in request.get_json(force=True)
                     if message["data"]["state"] == "exited"]
 
         for message in messages:

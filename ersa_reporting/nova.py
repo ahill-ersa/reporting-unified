@@ -12,6 +12,7 @@ from ersa_reporting import db, id_column, configure
 from ersa_reporting import get_or_create, commit, app
 from ersa_reporting import add, delete, request, require_auth
 from ersa_reporting import Resource, QueryResource, record_input
+from ersa_reporting import BaseIngestResource
 
 # Data Models
 
@@ -282,18 +283,15 @@ class SnapshotResource(QueryResource):
     query_class = Snapshot
 
 
-class IngestResource(Resource):
-    @require_auth
-    def put(self):
+class IngestResource(BaseIngestResource):
+    def ingest(self):
         """Ingest data."""
 
         @lru_cache(maxsize=100000)
         def cache(model, **kwargs):
             return get_or_create(model, **kwargs)
 
-        record_input()
-
-        for message in request.json:
+        for message in request.get_json(force=True):
             data = message["data"]
 
             snapshot = cache(Snapshot, ts=data["timestamp"])

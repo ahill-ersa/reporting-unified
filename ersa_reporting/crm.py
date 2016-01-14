@@ -7,7 +7,7 @@
 from sqlalchemy.dialects.postgresql import UUID
 
 from ersa_reporting import app, db, add, id_column, configure, commit
-from ersa_reporting import get_or_create, record_input
+from ersa_reporting import get_or_create, record_input, BaseIngestResource
 from ersa_reporting import request, require_auth, Resource, QueryResource
 
 # Data Models
@@ -143,14 +143,10 @@ class SnapshotResource(QueryResource):
     query_class = Snapshot
 
 
-class IngestResource(Resource):
-    @require_auth
-    def put(self):
+class IngestResource(BaseIngestResource):
+    def ingest(self):
         """Ingest snapshots."""
-
-        record_input()
-
-        for message in request.json:
+        for message in request.get_json(force=True):
             data = message["data"]
 
             snapshot = Snapshot(ts=data["timestamp"])

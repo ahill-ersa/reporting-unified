@@ -9,6 +9,7 @@ from functools import lru_cache
 from ersa_reporting import add, app, db, configure, get_or_create
 from ersa_reporting import record_input, to_dict, request, id_column
 from ersa_reporting import commit, require_auth, Resource, QueryResource
+from ersa_reporting import BaseIngestResource
 
 
 def extract_allocation(name):
@@ -159,9 +160,8 @@ class VirtualVolumeUsageResource(QueryResource):
     query_class = VirtualVolumeUsage
 
 
-class IngestResource(Resource):
-    @require_auth
-    def put(self):
+class IngestResource(BaseIngestResource):
+    def ingest(self):
         """Ingest usage."""
 
         @lru_cache(maxsize=1000)
@@ -170,7 +170,7 @@ class IngestResource(Resource):
 
         record_input()
 
-        for message in request.json:
+        for message in request.get_json(force=True):
             if not message["schema"] == "hnas.filesystems":
                 continue
 
