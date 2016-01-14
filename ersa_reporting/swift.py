@@ -46,7 +46,8 @@ class Usage(db.Model):
 
     def json(self):
         """JSON"""
-        return to_dict(self, ["bytes", "containers", "objects", "quota", "account_id", "snapshot_id"])
+        return to_dict(self, ["bytes", "containers", "objects", "quota",
+                              "account_id", "snapshot_id"])
 
 
 class AccountResource(QueryResource):

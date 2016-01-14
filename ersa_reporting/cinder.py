@@ -48,8 +48,8 @@ class Volume(db.Model):
 
     def json(self):
         """JSON"""
-        return to_dict(self, ["openstack_id", "availability_zone_id",
-                              "owner", "tenant"])
+        return to_dict(self, ["openstack_id", "availability_zone_id", "owner",
+                              "tenant"])
 
 
 class VolumeSnapshot(db.Model):
@@ -62,8 +62,8 @@ class VolumeSnapshot(db.Model):
 
     def json(self):
         """JSON"""
-        return to_dict(self, ["openstack_id", "name", "size",
-                              "description", "source"])
+        return to_dict(self, ["openstack_id", "name", "size", "description",
+                              "source"])
 
 
 class VolumeStatus(db.Model):
