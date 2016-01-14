@@ -224,7 +224,7 @@ class BusinessResource(QueryResource):
     @require_auth
     def put(self):
         try:
-            for item in request.json:
+            for item in request.get_json(force=True):
                 self.ingest(item)
             commit()
             return "", 204

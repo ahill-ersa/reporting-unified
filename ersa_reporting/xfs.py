@@ -16,7 +16,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from ersa_reporting import app, db, id_column, configure
 from ersa_reporting import get_or_create, commit, record_input
 from ersa_reporting import get, add, request, require_auth
-from ersa_reporting import Resource, QueryResource
+from ersa_reporting import Resource, QueryResource, BaseIngestResource
 
 # Data Models
 
@@ -136,21 +136,23 @@ class UsageResource(QueryResource):
     query_class = Usage
 
 
-class IngestResource(Resource):
-    @require_auth
-    def put(self):
+class IngestResource(BaseIngestResource):
+    def ingest(self):
         """Ingest usage."""
 
         @lru_cache(maxsize=10000)
         def cache(model, **kwargs):
             return get_or_create(model, **kwargs)
 
+        # This one is experimentally optimised for performance.
+        # Internally creates a TSV and copies it straight
+        # into the database.
+        # Probably not necessary though.
+
         tsv = io.StringIO()
 
-        record_input()
-
         for ingest_pass in [1, 2]:
-            for message in request.json:
+            for message in request.get_json(force=True):
                 data = message["data"]
 
                 host = cache(Host, name=data["hostname"])

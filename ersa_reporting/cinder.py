@@ -6,10 +6,10 @@
 
 from functools import lru_cache
 
-from ersa_reporting import db, id_column, configure
+from ersa_reporting import db, id_column, configure, record_input
 from ersa_reporting import get_or_create, commit, app, to_dict
 from ersa_reporting import add, delete, request, require_auth
-from ersa_reporting import Resource, QueryResource, record_input
+from ersa_reporting import Resource, BaseIngestResource, QueryResource
 
 # Data Models
 
@@ -133,16 +133,15 @@ class VolumeAttachmentResource(QueryResource):
     query_class = VolumeAttachment
 
 
-class IngestResource(Resource):
-    @require_auth
-    def put(self):
+class IngestResource(BaseIngestResource):
+    def ingest(self):
         """Data ingest"""
 
         @lru_cache(maxsize=100000)
         def cache(model, **kwargs):
             return get_or_create(model, **kwargs)
 
-        for message in request.json:
+        for message in request.get_json(force=True):
             data = message["data"]
 
             snapshot = cache(Snapshot, ts=data["timestamp"])

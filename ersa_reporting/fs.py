@@ -6,7 +6,7 @@
 
 from functools import lru_cache
 
-from ersa_reporting import db, id_column, configure
+from ersa_reporting import db, id_column, configure, BaseIngestResource
 from ersa_reporting import get_or_create, commit, app, to_dict
 from ersa_reporting import add, delete, request, require_auth
 from ersa_reporting import Resource, QueryResource, record_input
@@ -130,12 +130,11 @@ class UsageResource(QueryResource):
     query_class = Usage
 
 
-class IngestResource(Resource):
-    @require_auth
-    def put(self):
+class IngestResource(BaseIngestResource):
+    def ingest(self):
         """Ingest usage."""
 
-        for message in request.json:
+        for message in request.get_json(force=True):
             inserts = []
 
             data = message["data"]

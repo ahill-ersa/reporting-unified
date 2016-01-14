@@ -40,6 +40,10 @@ STRIP_ID = re.compile("_id$")
 
 REQUIRED_ENVIRONMENT = ["ERSA_BIND", "ERSA_DATABASE_URI"]
 
+AUTH_TOKEN = os.getenv("ERSA_AUTH_TOKEN")
+if AUTH_TOKEN is not None:
+    AUTH_TOKEN = AUTH_TOKEN.lower()
+
 UUID_NAMESPACE = uuid.UUID("aeb7cf1c-a842-4592-82e9-55d2dad00150")
 
 app = Flask("app")
@@ -56,20 +60,6 @@ db = SQLAlchemy(app)
 def identifier(content):
     """A generator for consistent IDs."""
     return str(uuid.uuid5(UUID_NAMESPACE, str(content)))
-
-
-def register_input(name):
-    """
-    Register an input.
-    Concurrent modifications will fail on commit and a retry
-    will return Conflict (HTTP 409), so this is safe.
-    """
-    item = get(Input, name=name)
-    if item:
-        return "", 409
-    else:
-        add(Input(name=name))
-        return None
 
 
 def missing_environment(extras=None):
@@ -142,28 +132,60 @@ def flush():
     db.session.flush()
 
 
+def constant_time_compare(val1, val2):
+    """
+    Borrowed from Django!
+
+    Returns True if the two strings are equal, False otherwise.
+    The time taken is independent of the number of characters that match.
+    For the sake of simplicity, this function executes in constant time only
+    when the two strings have the same length. It short-circuits when they
+    have different lengths. Since Django only uses it to compare hashes of
+    known expected length, this is acceptable.
+    """
+    if len(val1) != len(val2):
+        return False
+    result = 0
+    for x, y in zip(val1, val2):
+        result |= ord(x) ^ ord(y)
+    return result == 0
+
+
 def require_auth(func):
     """
     Authenticate via the external reporting-auth service.
+
+    For dev/test purposes: if ERSA_AUTH_TOKEN environment variable
+    exists, check against that instead.
     """
 
     @wraps(func)
     def decorated(*args, **kwargs):
         """Check the header."""
+        success = False
+
         try:
             token = str(uuid.UUID(request.headers.get("x-ersa-auth-token",
-                                                      "")))
+                                                      ""))).lower()
+        except:
+            return "", 403
+
+        if AUTH_TOKEN is not None:
+            if constant_time_compare(token, AUTH_TOKEN):
+                success = True
+        else:
             auth_response = requests.get(
                 "https://reporting.ersa.edu.au/auth?secret=%s" % token)
-            if auth_response.status_code != 200:
-                return "", 403
-            else:
+            if auth_response.status_code == 200:
                 auth_data = auth_response.json()
                 for endpoint in auth_data["endpoints"]:
                     if endpoint["name"] == PACKAGE:
-                        return func(*args, **kwargs)
-                return "", 403
-        except:
+                        success = True
+                        break
+
+        if success:
+            return func(*args, **kwargs)
+        else:
             return "", 403
 
     return decorated
@@ -263,6 +285,15 @@ class QueryResource(Resource):
     @require_auth
     def post(self):
         return self.get()
+
+
+class BaseIngestResource(Resource):
+    """Base Ingestion"""
+
+    @require_auth
+    def put(self):
+        record_input()
+        return self.ingest()
 
 
 class Input(db.Model):
