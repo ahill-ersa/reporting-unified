@@ -48,7 +48,7 @@ class Volume(db.Model):
 
     def json(self):
         """JSON"""
-        return to_dict(self, ["id", "openstack_id", "availability_zone_id",
+        return to_dict(self, ["openstack_id", "availability_zone_id",
                               "owner", "tenant"])
 
 
@@ -62,7 +62,7 @@ class VolumeSnapshot(db.Model):
 
     def json(self):
         """JSON"""
-        return to_dict(self, ["id", "openstack_id", "name", "size",
+        return to_dict(self, ["openstack_id", "name", "size",
                               "description", "source"])
 
 
@@ -73,7 +73,7 @@ class VolumeStatus(db.Model):
 
     def json(self):
         """JSON"""
-        return to_dict(self, ["id", "name"])
+        return to_dict(self, ["name"])
 
 
 class VolumeState(db.Model):
@@ -88,7 +88,7 @@ class VolumeState(db.Model):
 
     def json(self):
         """JSON"""
-        return to_dict(self, ["id", "name", "size", "snapshot_id", "volume_id",
+        return to_dict(self, ["name", "size", "snapshot_id", "volume_id",
                               "status_id"])
 
 
@@ -102,7 +102,7 @@ class VolumeAttachment(db.Model):
 
     def json(self):
         """JSON"""
-        return to_dict(self, ["id", "instance", "volume_id", "snapshot_id"])
+        return to_dict(self, ["instance", "volume_id", "snapshot_id"])
 
 
 class SnapshotResource(QueryResource):
