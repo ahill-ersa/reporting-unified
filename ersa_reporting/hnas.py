@@ -168,8 +168,6 @@ class IngestResource(BaseIngestResource):
         def cache(model, **kwargs):
             return get_or_create(model, **kwargs)
 
-        record_input()
-
         for message in request.get_json(force=True):
             if not message["schema"] == "hnas.filesystems":
                 continue
