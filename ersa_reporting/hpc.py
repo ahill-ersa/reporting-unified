@@ -123,7 +123,7 @@ class IngestResource(BaseIngestResource):
 
         messages = [message
                     for message in request.get_json(force=True)
-                    if message["data"]["state"] == "exited"]
+                    if message["data"].get("state") == "exited"]
 
         for message in messages:
             data = message["data"]
