@@ -153,6 +153,9 @@ class IngestResource(BaseIngestResource):
 
         for ingest_pass in [1, 2]:
             for message in request.get_json(force=True):
+                if message["schema"] != "xfs.quota.report":
+                    continue
+
                 data = message["data"]
 
                 host = cache(Host, name=data["hostname"])
