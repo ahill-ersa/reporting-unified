@@ -1,0 +1,15 @@
+{
+  "DB_API": {
+    "ENDPOINT": "topic ingesting url",
+    "TOKEN": "secret",
+    "SCHEMA": "schema matches to db api: e.g. pbs.accounting.log"
+  },
+  "HCP": {
+    "ID": "access account",
+    "SECRET": "secret",
+    "ENDPOINT": "object storage url",
+    "BUCKET": "archive",
+    "PREFIX": "KAFKA Cluster Name: 20160113-112448",
+    "SUBSTRING": "A specific filter string"
+  }
+}
