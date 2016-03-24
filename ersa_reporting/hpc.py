@@ -51,7 +51,7 @@ class Job(db.Model):
     job_id = db.Column(db.String(64), unique=True, nullable=False)
     owner_id = db.Column(None, db.ForeignKey("owner.id"))
     queue_id = db.Column(None, db.ForeignKey("queue.id"))
-    name = db.Column(db.String(64))
+    name = db.Column(db.String(256))
     start = db.Column(db.Integer)
     end = db.Column(db.Integer)
     cores = db.Column(db.Integer)
