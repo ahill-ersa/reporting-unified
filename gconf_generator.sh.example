@@ -1,0 +1,34 @@
+#!/bin/bash
+
+# This is part of cloud deployment of ersa_reporting/reporting_unified
+# Should run after non-secret configuration files have been installed.
+
+if [ $UID -ne 0 ]; then
+    echo "error: this script requires root access"
+    exit 1
+fi
+
+if [[ $# -ne 1 ]]; then
+    echo "error: missing name of package to be installed"
+    exit 1
+fi
+
+PDIR=/usr/lib/ersa_reporting
+package=$1
+echo "Will create $PDIR/$package.conf"
+cat > $PDIR/$package.conf <<EOF
+raw_env = ["ERSA_REPORTING_PACKAGE=$package", "ERSA_DEBUG=True",
+           "ERSA_DATABASE_URI=postgresql://db_user_name:db_passwd@db_host/db_name",
+           "ERSA_AUTH_TOKEN=debug_token or remove it"]
+timeout = 7200
+proc_name = "$package"
+workers = 2
+PDIRfile = "/run/gunicorn/$package.PDIR"
+accesslog = "/var/log/gunicorn/${package}_access.log"
+errorlog = "/var/log/gunicorn/${package}_error.log"
+loglevel = "info"
+EOF
+
+echo "Running: systemctl start gunicorn.$package.socket"
+systemctl start gunicorn.$package.socket
+systemctl status gunicorn.$package.socket
