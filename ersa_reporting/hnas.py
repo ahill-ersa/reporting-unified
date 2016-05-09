@@ -12,28 +12,6 @@ from ersa_reporting import commit, require_auth, Resource, QueryResource
 from ersa_reporting import BaseIngestResource
 
 
-def extract_allocation(name):
-    if not name.islower():
-        return None
-    name = name.split("-")
-    try:
-        return int(name[-1])
-    except ValueError:
-        return None
-
-
-class Allocation(db.Model):
-    """Storage Allocation"""
-    id = id_column()
-    allocation = db.Column(db.Integer, unique=True, nullable=False)
-    filesystems = db.relationship("Filesystem", backref="allocation")
-    virtual_volumes = db.relationship("VirtualVolume", backref="allocation")
-
-    def json(self):
-        """JSON"""
-        return to_dict(self, ["allocation"])
-
-
 class Owner(db.Model):
     """Storage Account/Owner"""
     id = id_column()
@@ -65,11 +43,10 @@ class Filesystem(db.Model):
     name = db.Column(db.String(256), unique=True, nullable=False)
     virtual_volumes = db.relationship("VirtualVolume", backref="filesystem")
     usage = db.relationship("FilesystemUsage", backref="filesystem")
-    allocation_id = db.Column(None, db.ForeignKey("allocation.id"))
 
     def json(self):
         """JSON"""
-        return to_dict(self, ["name", "allocation"])
+        return to_dict(self, ["name"])
 
 
 class VirtualVolume(db.Model):
@@ -81,11 +58,10 @@ class VirtualVolume(db.Model):
                               db.ForeignKey("filesystem.id"),
                               index=True,
                               nullable=False)
-    allocation_id = db.Column(None, db.ForeignKey("allocation.id"))
 
     def json(self):
         """JSON"""
-        return to_dict(self, ["name", "filesystem", "allocation"])
+        return to_dict(self, ["name", "filesystem_id"])
 
 
 class FilesystemUsage(db.Model):
@@ -107,7 +83,7 @@ class FilesystemUsage(db.Model):
     def json(self):
         """JSON"""
         return to_dict(self, ["capacity", "free", "live_usage",
-                              "snapshot_usage", "snapshot", "filesystem"])
+                              "snapshot_usage", "snapshot_id", "filesystem_id"])
 
 
 class VirtualVolumeUsage(db.Model):
@@ -128,12 +104,8 @@ class VirtualVolumeUsage(db.Model):
 
     def json(self):
         """JSON"""
-        return to_dict(self, ["files", "quota", "usage", "owner", "snapshot",
-                              "virtual_volume"])
-
-
-class AllocationResource(QueryResource):
-    query_class = Allocation
+        return to_dict(self, ["files", "quota", "usage", "owner_id", "snapshot_id",
+                              "virtual_volume_id"])
 
 
 class OwnerResource(QueryResource):
@@ -177,12 +149,7 @@ class IngestResource(BaseIngestResource):
             snapshot = cache(Snapshot, ts=data["timestamp"])
 
             for name, details in data["filesystems"].items():
-                allocation = None
-                allocation_id = extract_allocation(name)
-                if allocation_id:
-                    allocation = cache(Allocation, allocation=allocation_id)
-
-                fs = cache(Filesystem, name=name, allocation=allocation)
+                fs = cache(Filesystem, name=name)
                 fs_usage = {
                     "filesystem": fs,
                     "snapshot": snapshot,
@@ -200,16 +167,9 @@ class IngestResource(BaseIngestResource):
                         if name.startswith("/"):
                             name = name[1:]
 
-                        allocation = None
-                        allocation_id = extract_allocation(name)
-                        if allocation_id:
-                            allocation = cache(Allocation,
-                                               allocation=allocation_id)
-
                         vivol = cache(VirtualVolume,
                                       name=name,
-                                      filesystem=fs,
-                                      allocation=allocation)
+                                      filesystem=fs)
 
                         vivol_usage = {
                             "snapshot": snapshot,
@@ -235,7 +195,6 @@ def setup():
     """Let's roll."""
 
     resources = {
-        "/allocation": AllocationResource,
         "/owner": OwnerResource,
         "/snapshot": SnapshotResource,
         "/filesystem": FilesystemResource,

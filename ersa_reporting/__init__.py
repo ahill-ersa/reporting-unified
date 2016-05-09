@@ -11,6 +11,7 @@ import uuid
 from functools import wraps
 
 import requests
+import logging
 
 from flask import Flask, request
 from flask.ext import restful
@@ -46,6 +47,28 @@ if AUTH_TOKEN is not None:
 
 UUID_NAMESPACE = uuid.UUID("aeb7cf1c-a842-4592-82e9-55d2dad00150")
 
+LOG_DIR = "/var/log/gunicorn/"
+LOG_SIZE = 30000000
+LOG_LEVEL = os.getenv("LOG_LEVEL")
+
+if LOG_LEVEL is not None:
+    LOG_LEVEL = os.getenv("LOG_LEVEL").capitalize()
+else:
+    LOG_LEVEL = 'DEBUG'
+
+top_logger = logging.getLogger(__name__)
+# Logger is created by the calling module with the calling module's name as log name
+# All other modules use this log
+def create_logger(module_name):
+    log_name = "%s/%s.log" % (LOG_DIR, module_name)
+    file_handler = logging.handlers.RotatingFileHandler(log_name, maxBytes=LOG_SIZE)
+    file_handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s: %(message)s'))
+    logger = logging.getLogger(__name__)
+    logger.addHandler(file_handler)
+    logger.setLevel(LOG_LEVEL)
+
+    return logger
+
 app = Flask("app")
 
 # Stop SQLAlchemy complaining, re: "SQLALCHEMY_TRACK_MODIFICATIONS adds
@@ -55,7 +78,6 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 cors = CORS(app)
 restapi = restful.Api(app)
 db = SQLAlchemy(app)
-
 
 def identifier(content):
     """A generator for consistent IDs."""
@@ -275,7 +297,16 @@ class QueryResource(Resource):
 
     def get_raw(self):
         """Query"""
-        return do_query(self.query_class)
+        try:
+            top_logger.debug("Query: %s" % self.query_class.query)
+            return do_query(self.query_class)
+        except Exception as e:
+            logger.error("Query %s failed. Detail: %s" % (self.query_class.query, str(e)))
+
+            return do_query(self.query_class)
+        except Exception as e:
+            top_logger.error("Query %s failed. Detail: %s" % (self.query_class.query, str(e)))
+            return []
 
     @require_auth
     def get(self):

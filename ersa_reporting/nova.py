@@ -13,9 +13,11 @@ from ersa_reporting import get_or_create, commit, app
 from ersa_reporting import add, delete, request, require_auth
 from ersa_reporting import Resource, QueryResource, record_input
 from ersa_reporting import BaseIngestResource
+from ersa_reporting import create_logger
+
+logger = create_logger(__name__)
 
 # Data Models
-
 
 class Snapshot(db.Model):
     """A snapshot of the world."""
@@ -312,11 +314,16 @@ class IngestResource(BaseIngestResource):
                     continue
                 availability_zone = cache(AvailabilityZone,
                                           name=availability_zone_name)
+                if not availability_zone_name.startswith('sa'):
+                    logger.debug("Skip non-sa zone: %s" % availability_zone_name)
+                    continue
+
 
                 hypervisor_hostname = instance_detail[
                     "OS-EXT-SRV-ATTR:hypervisor_hostname"]
                 if not hypervisor_hostname:
                     continue
+
                 hypervisor = cache(Hypervisor,
                                    name=hypervisor_hostname,
                                    availability_zone=availability_zone)
@@ -364,7 +371,6 @@ class IngestResource(BaseIngestResource):
                                              address=ip))
 
         commit()
-
         return "", 204
 
 
