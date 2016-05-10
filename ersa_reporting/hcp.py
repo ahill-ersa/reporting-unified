@@ -82,6 +82,9 @@ class Usage(db.Model):
     objects = db.Column(db.BigInteger, nullable=False)
     bytes_in = db.Column(db.BigInteger, nullable=False)
     bytes_out = db.Column(db.BigInteger, nullable=False)
+    # FIXME: below four should be optional as the current producer seems not having them
+    # The HCP official doc checked on 2016/05/10 at:
+    # http://hcpsdk.readthedocs.io/en/latest/40_mapi/40-3_mapi-chargeback.html
     metadata_only_objects = db.Column(db.BigInteger, nullable=False)
     metadata_only_bytes = db.Column(db.BigInteger, nullable=False)
     tiered_objects = db.Column(db.BigInteger, nullable=False)
@@ -202,13 +205,28 @@ class IngestResource(BaseIngestResource):
                         "deletes": details["deletes"],
                         "objects": details["objectCount"],
                         "bytes_in": details["bytesIn"],
-                        "bytes_out": details["bytesOut"],
-                        "metadata_only_objects":
-                        details["metadataOnlyObjects"],
-                        "metadata_only_bytes": details["metadataOnlyBytes"],
-                        "tiered_objects": details["tieredObjects"],
-                        "tiered_bytes": details["tieredBytes"]
+                        "bytes_out": details["bytesOut"]
                     }
+
+                    if "metadataOnlyObjects" in details:
+                        usage["metadata_only_objects"] = details["metadataOnlyObjects"]
+                    else:
+                        usage["metadata_only_objects"] = 0
+
+                    if "metadataOnlyBytes" in details:
+                        usage["metadata_only_bytes"] = details["metadataOnlyBytes"],
+                    else:
+                        usage["metadata_only_bytes"] = 0
+
+                    if "tieredObjects" in details:
+                        usage["tiered_objects"] = details["tieredObjects"],
+                    else:
+                        usage["tiered_objects"] = 0
+
+                    if "tieredBytes" in details:
+                        usage["tiered_bytes"] = details["tieredBytes"]
+                    else:
+                        usage["tiered_bytes"] = 0
 
                     add(Usage(**usage))
 

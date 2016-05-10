@@ -17,6 +17,7 @@ from ersa_reporting import create_logger
 
 logger = create_logger(__name__)
 
+
 # Data Models
 
 class Snapshot(db.Model):
@@ -317,7 +318,6 @@ class IngestResource(BaseIngestResource):
                 if not availability_zone_name.startswith('sa'):
                     logger.debug("Skip non-sa zone: %s" % availability_zone_name)
                     continue
-
 
                 hypervisor_hostname = instance_detail[
                     "OS-EXT-SRV-ATTR:hypervisor_hostname"]

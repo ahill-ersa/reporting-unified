@@ -57,6 +57,8 @@ else:
     LOG_LEVEL = 'DEBUG'
 
 top_logger = logging.getLogger(__name__)
+
+
 # Logger is created by the calling module with the calling module's name as log name
 # All other modules use this log
 def create_logger(module_name):
@@ -78,6 +80,7 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 cors = CORS(app)
 restapi = restful.Api(app)
 db = SQLAlchemy(app)
+
 
 def identifier(content):
     """A generator for consistent IDs."""
@@ -299,10 +302,6 @@ class QueryResource(Resource):
         """Query"""
         try:
             top_logger.debug("Query: %s" % self.query_class.query)
-            return do_query(self.query_class)
-        except Exception as e:
-            logger.error("Query %s failed. Detail: %s" % (self.query_class.query, str(e)))
-
             return do_query(self.query_class)
         except Exception as e:
             top_logger.error("Query %s failed. Detail: %s" % (self.query_class.query, str(e)))
