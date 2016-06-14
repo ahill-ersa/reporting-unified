@@ -11,7 +11,13 @@ if len(sys.argv) != 2:
 
 package = sys.argv[1]
 
+# read config.py instead of using env
+# therefore it has to be run above the pacakge ersa-reporting
+# add root path the sys.path
+sys.path.append('.')
+
+import config
+
 module = __import__(package)
 
-module.db.engine.execute("create extension if not exists \"uuid-ossp\";")
 module.db.create_all()

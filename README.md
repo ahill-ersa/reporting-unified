@@ -1,6 +1,17 @@
 # reporting-unified [![Build Status](https://travis-ci.org/eResearchSA/reporting-unified.svg)](https://travis-ci.org/eResearchSA/reporting-unified)
 A bunch of small Flask applications for accessing eRSA reporting databases.
 
+The package only works for PostgreSql because it uses:
+
+* UUID
+* INET
+* MACADDR
+
+0. run `sudo -u postgres psql -f prepare_db.sql`
+0. Update config.py
+0. activate env
+0. bin/ersa_reporting-prep ersa_reporting.PACKAGE
+
 ##Deployment
 
 The package can be served by, for example, __nginx__ (proxy) + __gunicorn__.
