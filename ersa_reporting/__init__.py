@@ -14,11 +14,13 @@ import requests
 import logging
 
 from flask import Flask, request
-from flask.ext import restful
-from flask.ext.cors import CORS
-from flask.ext.restful import Resource, reqparse
-from flask.ext.sqlalchemy import SQLAlchemy
 
+from flask_cors import CORS
+
+import flask_restful
+from flask_restful import Resource, reqparse
+
+from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.sql import text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm.relationships import RelationshipProperty
@@ -78,7 +80,7 @@ app = Flask("app")
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 cors = CORS(app)
-restapi = restful.Api(app)
+restapi = flask_restful.Api(app)
 db = SQLAlchemy(app)
 
 
