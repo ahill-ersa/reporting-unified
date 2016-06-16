@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 """Application and persistence management."""
 
 # pylint: disable=no-member, import-error, no-init, too-few-public-methods
@@ -6,142 +5,15 @@
 
 from functools import lru_cache
 
-from ersa_reporting import db, id_column, configure, get_or_create
+from ersa_reporting import configure, get_or_create
 from ersa_reporting import record_input, commit, app, request
 from ersa_reporting import require_auth, Resource, QueryResource
 from ersa_reporting import BaseIngestResource
 
-
-def get_domain(name):
-    """Extract an organisational domain from an email address."""
-    if "@" in name:
-        domain_name = name.split("@")[1]
-        if domain_name.endswith(".edu.au"):
-            domain_name = ".".join(domain_name.split(".")[-3:])
-        elif domain_name.endswith(".edu"):
-            domain_name = ".".join(domain_name.split(".")[-2:])
-        return domain_name
-    else:
-        return None
-
-# Data Models
-
-
-class Snapshot(db.Model):
-    """A snapshot of the world."""
-    id = id_column()
-    ts = db.Column(db.Integer, unique=True, nullable=False)
-    mappings = db.relationship("AccountReferenceMapping", backref="snapshot")
-    memberships = db.relationship("Membership", backref="snapshot")
-
-    def json(self):
-        """Jsonify"""
-        return {"id": self.id, "ts": self.ts}
-
-
-class Domain(db.Model):
-    """An organisation-level domain."""
-    id = id_column()
-    name = db.Column(db.String(128), unique=True, nullable=False)
-    references = db.relationship("AccountReference", backref="domain")
-
-    def json(self):
-        """Jsonify"""
-        return {"id": self.id, "name": self.name}
-
-
-class Tenant(db.Model):
-    """OpenStack Tenant"""
-    id = id_column()
-    openstack_id = db.Column(db.String(128), unique=True, nullable=False)
-    allocation = db.Column(db.Integer)
-    name = db.Column(db.String(128))
-    description = db.Column(db.String(512))
-    memberships = db.relationship("Membership", backref="tenant")
-
-    def json(self):
-        """Jsonify"""
-        return {
-            "id": self.id,
-            "openstack_id": self.openstack_id,
-            "allocation": self.allocation,
-            "name": self.name,
-            "description": self.description
-        }
-
-
-class Membership(db.Model):
-    """Tenant Membership at a point-in-time."""
-    id = id_column()
-    account_id = db.Column(None,
-                           db.ForeignKey("account.id"),
-                           index=True,
-                           nullable=False)
-    tenant_id = db.Column(None,
-                          db.ForeignKey("tenant.id"),
-                          index=True,
-                          nullable=False)
-    snapshot_id = db.Column(None,
-                            db.ForeignKey("snapshot.id"),
-                            index=True,
-                            nullable=False)
-
-    def json(self):
-        """Jsonify"""
-
-        return {
-            "account": self.account_id,
-            "tenant": self.tenant_id,
-            "snapshot": self.snapshot_id
-        }
-
-
-class Account(db.Model):
-    """OpenStack Account"""
-    id = id_column()
-    openstack_id = db.Column(db.String(128), unique=True, nullable=False)
-    mappings = db.relationship("AccountReferenceMapping", backref="account")
-    memberships = db.relationship("Membership", backref="account")
-
-    def json(self):
-        """Jsonify"""
-        return {"id": self.id, "openstack_id": self.openstack_id}
-
-
-class AccountReference(db.Model):
-    """Email Address"""
-    id = id_column()
-    value = db.Column(db.String(128), unique=True, nullable=False)
-    domain_id = db.Column(None, db.ForeignKey("domain.id"))
-    mappings = db.relationship("AccountReferenceMapping", backref="reference")
-
-    def json(self):
-        """Jsonify"""
-        return {"id": self.id, "value": self.value, "domain": self.domain_id}
-
-
-class AccountReferenceMapping(db.Model):
-    """Linkage between Email and OpenStack Account at point-in-time."""
-    id = id_column()
-    account_id = db.Column(None, db.ForeignKey("account.id"), nullable=False)
-    reference_id = db.Column(None,
-                             db.ForeignKey("account_reference.id"),
-                             nullable=False)
-    snapshot_id = db.Column(None, db.ForeignKey("snapshot.id"), nullable=False)
-    __table_args__ = (db.UniqueConstraint("account_id", "reference_id",
-                                          "snapshot_id"), )
-
-    def json(self):
-        """Jsonify"""
-        return {
-            "id": self.id,
-            "account": self.account_id,
-            "reference": self.reference_id,
-            "snapshot": self.snapshot_id
-        }
+from nectar import get_domain
+from .models.keystone import *
 
 # API
-
 
 class AccountResource(QueryResource):
     """Account"""

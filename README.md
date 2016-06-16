@@ -1,7 +1,7 @@
 # reporting-unified [![Build Status](https://travis-ci.org/eResearchSA/reporting-unified.svg)](https://travis-ci.org/eResearchSA/reporting-unified)
 A bunch of small Flask applications for accessing eRSA reporting databases.
 
-The package only works for PostgreSql because it uses:
+The package only works with PostgreSQL because it uses:
 
 * UUID
 * INET
@@ -12,7 +12,7 @@ The package only works for PostgreSql because it uses:
 0. activate env
 0. bin/ersa_reporting-prep ersa_reporting.PACKAGE
 
-##Deployment
+## Deployment
 
 The package can be served by, for example, __nginx__ (proxy) + __gunicorn__.
 
@@ -29,7 +29,7 @@ An application's log is named as ersa_reporting._application_.log, e.g. __'ersa_
 One example shown here assumes package has been installed in `/usr/lib/ersa_reporting` in a virtual environment in `unified_api_env`
 and application `hnas` is being served by these commands:
 
-###run gunicorn
+### run gunicorn
 
 ```shell
 PDIR=/usr/lib/ersa_reporting
@@ -52,4 +52,17 @@ pidfile = "/run/gunicorn/hnas.pid"
 accesslog = "/var/log/gunicorn/hnas_access.log"
 errorlog = "/var/log/gunicorn/hnas_error.log"
 loglevel = "info"
+```
+
+### Biller script
+
+This script is for generating bills directly. It needs credential for accessing
+Nectar Keystone. Different to other apps, it takes one extra configure file
+defined by the environment variable `APP_CONFIG_FILE`. It should contains
+at least these two variables and others to override those in `config.py`:
+
+```python
+
+NECTAR_USER = "username"
+NECTAR_USER_PASS = "password"
 ```

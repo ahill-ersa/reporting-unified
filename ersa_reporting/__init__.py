@@ -3,15 +3,14 @@
 
 # pylint: disable=no-init, too-few-public-methods, no-self-use
 
-import os
 import re
-import sys
 import uuid
 
 from functools import wraps
 
 import requests
 import logging
+import logging.handlers
 
 from flask import Flask, request
 
@@ -37,26 +36,36 @@ QUERY_PARSER.add_argument("count",
 INPUT_PARSER = reqparse.RequestParser()
 INPUT_PARSER.add_argument("name", location="args", required=True)
 
-PACKAGE = os.environ["ERSA_REPORTING_PACKAGE"]
+app = Flask("app")
+app.config.from_object('config')
+
+PACKAGE = app.config["ERSA_REPORTING_PACKAGE"]
 
 STRIP_ID = re.compile("_id$")
 
-REQUIRED_ENVIRONMENT = ["ERSA_BIND", "ERSA_DATABASE_URI"]
+# TODO: to remove
+# REQUIRED_ENVIRONMENT = ["ERSA_BIND", "ERSA_DATABASE_URI"]
 
-AUTH_TOKEN = os.getenv("ERSA_AUTH_TOKEN")
+AUTH_TOKEN = app.config["ERSA_AUTH_TOKEN"]
 if AUTH_TOKEN is not None:
     AUTH_TOKEN = AUTH_TOKEN.lower()
 
 UUID_NAMESPACE = uuid.UUID("aeb7cf1c-a842-4592-82e9-55d2dad00150")
 
-LOG_DIR = "/var/log/gunicorn/"
-LOG_SIZE = 30000000
-LOG_LEVEL = os.getenv("LOG_LEVEL")
-
-if LOG_LEVEL is not None:
-    LOG_LEVEL = os.getenv("LOG_LEVEL").capitalize()
+if "LOG_DIR" in app.config:
+    LOG_DIR = app.config["LOG_DIR"]
 else:
-    LOG_LEVEL = 'DEBUG'
+    LOG_DIR = "."
+
+if "LOG_LEVEL" in app.config:
+    LOG_LEVEL = getattr(logging, app.config["LOG_LEVEL"].upper(), logging.DEBUG)
+else:
+    LOG_LEVEL = logging.DEBUG
+
+if "LOG_SIZE" in app.config:
+    LOG_SIZE = app.config["LOG_SIZE"]
+else:
+    LOG_SIZE = 30000000
 
 top_logger = logging.getLogger(__name__)
 
@@ -73,7 +82,16 @@ def create_logger(module_name):
 
     return logger
 
-app = Flask("app")
+
+def get_db_binding(package):
+    """Get db binding for a package. Default is None. Argument is __name__"""
+    db_binding = None
+    if app.config["SQLALCHEMY_BINDS"]:
+        MOD = package.split(".")[-1]
+        if MOD in app.config["SQLALCHEMY_BINDS"]:
+            db_binding = MOD
+    return db_binding
+
 
 # Stop SQLAlchemy complaining, re: "SQLALCHEMY_TRACK_MODIFICATIONS adds
 # significant overhead and will be disabled by default in the future."
@@ -87,20 +105,6 @@ db = SQLAlchemy(app)
 def identifier(content):
     """A generator for consistent IDs."""
     return str(uuid.uuid5(UUID_NAMESPACE, str(content)))
-
-
-def missing_environment(extras=None):
-    """Check for missing environment variables."""
-    required_environment = REQUIRED_ENVIRONMENT.copy()
-    if extras and len(extras) > 0:
-        required_environment += extras
-
-    missing = [var for var in required_environment if var not in os.environ]
-
-    if len(missing) > 0:
-        return "Missing environment vars: %s" % " ".join(missing)
-    else:
-        return None
 
 
 def github(deps):
@@ -288,7 +292,7 @@ def do_query(model):
             order.append(name_or_id(model, order_spec[1:]).desc())
     query = query.order_by(*order)
     # execute
-    return query.paginate(args["page"], per_page=args["count"]).items
+    return query.paginate(args["page"], per_page=args["count"], error_out=False).items
 
 
 def record_input():
@@ -364,7 +368,3 @@ def configure(resources):
 
     for (endpoint, cls) in resources.items():
         restapi.add_resource(cls, endpoint)
-
-
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ["ERSA_DATABASE_URI"]
-app.config["DEBUG"] = os.getenv("ERSA_DEBUG", "").lower() == "true"

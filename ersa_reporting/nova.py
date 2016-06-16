@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 """Application and persistence management."""
 
 # pylint: disable=no-member, import-error, no-init, too-few-public-methods
@@ -6,7 +5,13 @@
 
 from functools import lru_cache
 
+from werkzeug.exceptions import NotFound
+
+from flask_restful import reqparse
+from flask_sqlalchemy import BaseQuery
 from sqlalchemy.dialects.postgresql import INET, MACADDR
+from sqlalchemy import distinct, desc
+from sqlalchemy.sql import func
 
 from ersa_reporting import db, id_column, configure
 from ersa_reporting import get_or_create, commit, app
@@ -14,269 +19,11 @@ from ersa_reporting import add, delete, request, require_auth
 from ersa_reporting import Resource, QueryResource, record_input
 from ersa_reporting import BaseIngestResource
 from ersa_reporting import create_logger
+from ersa_reporting import QUERY_PARSER
+
+from .models.nova import *
 
 logger = create_logger(__name__)
-
-
-# Data Models
-
-class Snapshot(db.Model):
-    """A snapshot of the world."""
-    id = id_column()
-    ts = db.Column(db.Integer, unique=True, nullable=False)
-    instance_states = db.relationship("InstanceState", backref="snapshot")
-    ip_address_mappings = db.relationship("IPAddressMapping",
-                                          backref="snapshot")
-    mac_address_mappings = db.relationship("MACAddressMapping",
-                                           backref="snapshot")
-
-    def json(self):
-        """Jsonify"""
-        return {"id": self.id, "ts": self.ts}
-
-
-class Account(db.Model):
-    """OpenStack Account"""
-    id = id_column()
-    openstack_id = db.Column(db.String(128), unique=True, nullable=False)
-    instances = db.relationship("Instance", backref="account")
-
-    def json(self):
-        """Jsonify"""
-        return {"id": self.id, "openstack_id": self.openstack_id}
-
-
-class Tenant(db.Model):
-    """OpenStack Tenant"""
-    id = id_column()
-    openstack_id = db.Column(db.String(128), unique=True, nullable=False)
-    instances = db.relationship("Instance", backref="tenant")
-
-    def json(self):
-        """Jsonify"""
-        return {"id": self.id, "openstack_id": self.openstack_id}
-
-
-class AvailabilityZone(db.Model):
-    """OpenStack AZ/Cell"""
-    id = id_column()
-    name = db.Column(db.String(64), unique=True, nullable=False)
-    hypervisors = db.relationship("Hypervisor", backref="availability_zone")
-    instances = db.relationship("Instance", backref="availability_zone")
-
-    def json(self):
-        """Jsonify"""
-        return {"id": self.id, "name": self.name}
-
-
-class IPAddress(db.Model):
-    """IP Address (v4 or v6)"""
-    id = id_column()
-    address = db.Column(INET, unique=True, nullable=False)
-    family = db.Column(db.Integer, index=True, nullable=False)
-    mappings = db.relationship("IPAddressMapping", backref="address")
-
-    def json(self):
-        """Jsonify"""
-        return {"id": self.id, "address": self.address, "family": self.family}
-
-
-class MACAddress(db.Model):
-    """MAC Address"""
-    id = id_column()
-    address = db.Column(MACADDR, unique=True, nullable=False)
-    mappings = db.relationship("MACAddressMapping", backref="address")
-
-    def json(self):
-        """Jsonify"""
-        return {"id": self.id, "address": self.address}
-
-
-class Flavor(db.Model):
-    """OpenStack Flavor"""
-    id = id_column()
-    openstack_id = db.Column(db.String(128), unique=True, nullable=False)
-    name = db.Column(db.String(64), unique=True, nullable=False)
-    vcpus = db.Column(db.Integer)
-    ram = db.Column(db.Integer)
-    disk = db.Column(db.Integer)
-    ephemeral = db.Column(db.Integer)
-    public = db.Column(db.Boolean)
-    instances = db.relationship("Instance", backref="flavor")
-
-    def json(self):
-        """Jsonify"""
-        return {
-            "id": self.id,
-            "openstack_id": self.openstack_id,
-            "name": self.name,
-            "vcpus": self.vcpus,
-            "ram": self.ram,
-            "disk": self.disk,
-            "ephemeral": self.ephemeral,
-            "public": self.public
-        }
-
-
-class Hypervisor(db.Model):
-    """OpenStack Hypervisor"""
-    id = id_column()
-    name = db.Column(db.String(128), unique=True, nullable=False)
-    availability_zone_id = db.Column(None,
-                                     db.ForeignKey("availability_zone.id"),
-                                     nullable=False)
-    instance_states = db.relationship("InstanceState", backref="hypervisor")
-
-    def json(self):
-        """Jsonify"""
-        return {
-            "id": self.id,
-            "name": self.name,
-            "availability_zone": self.availability_zone_id
-        }
-
-
-class Instance(db.Model):
-    """OpenStack VM/Instance"""
-    id = id_column()
-    openstack_id = db.Column(db.String(128), unique=True, nullable=False)
-    availability_zone_id = db.Column(None,
-                                     db.ForeignKey("availability_zone.id"),
-                                     index=True,
-                                     nullable=False)
-    account_id = db.Column(None,
-                           db.ForeignKey("account.id"),
-                           index=True,
-                           nullable=False)
-    tenant_id = db.Column(None,
-                          db.ForeignKey("tenant.id"),
-                          index=True,
-                          nullable=False)
-    flavor_id = db.Column(None,
-                          db.ForeignKey("flavor.id"),
-                          index=True,
-                          nullable=False)
-    instance_states = db.relationship("InstanceState", backref="instance")
-    ip_addresses = db.relationship("IPAddressMapping", backref="instance")
-    mac_addresses = db.relationship("MACAddressMapping", backref="instance")
-
-    def json(self):
-        """Jsonify"""
-        return {
-            "id": self.id,
-            "openstack_id": self.openstack_id,
-            "account": self.account_id,
-            "tenant": self.tenant_id,
-            "flavor": self.flavor_id
-        }
-
-
-class InstanceStatus(db.Model):
-    """Instance States (e.g. active, error, etc.)"""
-    id = id_column()
-    name = db.Column(db.String(64), unique=True, nullable=False)
-    instance_state = db.relationship("InstanceState", backref="status")
-
-    def json(self):
-        """Jsonify"""
-        return {"id": self.id, "name": self.name}
-
-
-class Image(db.Model):
-    """OpenStack Images"""
-    id = id_column()
-    openstack_id = db.Column(db.String(64), unique=True, nullable=False)
-    instance_state = db.relationship("InstanceState", backref="image")
-
-    def json(self):
-        """Jsonify"""
-        return {"id": self.id, "openstack_id": self.openstack_id}
-
-
-class InstanceState(db.Model):
-    """Point-in-time OpenStack Instance State"""
-    id = id_column()
-    snapshot_id = db.Column(None,
-                            db.ForeignKey("snapshot.id"),
-                            index=True,
-                            nullable=False)
-    instance_id = db.Column(None,
-                            db.ForeignKey("instance.id"),
-                            index=True,
-                            nullable=False)
-    image_id = db.Column(None, db.ForeignKey("image.id"), nullable=False)
-    status_id = db.Column(None,
-                          db.ForeignKey("instance_status.id"),
-                          nullable=False)
-    hypervisor_id = db.Column(None,
-                              db.ForeignKey("hypervisor.id"),
-                              nullable=False)
-
-    name = db.Column(db.String(128), index=True, nullable=False)
-
-    def json(self):
-        """Jsonify"""
-        return {
-            "id": self.id,
-            "name": self.name,
-            "snapshot": self.snapshot_id,
-            "instance": self.instance_id,
-            "image": self.image_id,
-            "status": self.status_id,
-            "hypervisor": self.hypervisor_id
-        }
-
-
-class IPAddressMapping(db.Model):
-    """Point-in-time IP-Instance Mapping"""
-    id = id_column()
-    instance_id = db.Column(None,
-                            db.ForeignKey("instance.id"),
-                            index=True,
-                            nullable=False)
-    address_id = db.Column(None,
-                           db.ForeignKey("ip_address.id"),
-                           index=True,
-                           nullable=False)
-    snapshot_id = db.Column(None,
-                            db.ForeignKey("snapshot.id"),
-                            index=True,
-                            nullable=False)
-
-    def json(self):
-        """Jsonify"""
-        return {
-            "id": self.id,
-            "instance": self.instance_id,
-            "address": self.address_id,
-            "snapshot": self.snapshot_id
-        }
-
-
-class MACAddressMapping(db.Model):
-    """Point-in-time MAC-Instance Mapping"""
-    id = id_column()
-    instance_id = db.Column(None,
-                            db.ForeignKey("instance.id"),
-                            index=True,
-                            nullable=False)
-    address_id = db.Column(None,
-                           db.ForeignKey("mac_address.id"),
-                           index=True,
-                           nullable=False)
-    snapshot_id = db.Column(None,
-                            db.ForeignKey("snapshot.id"),
-                            index=True,
-                            nullable=False)
-
-    def json(self):
-        """Jsonify"""
-        return {
-            "id": self.id,
-            "instance": self.instance_id,
-            "address": self.address_id,
-            "snapshot": self.snapshot_id
-        }
 
 # Endpoints
 
@@ -284,7 +31,6 @@ class MACAddressMapping(db.Model):
 class SnapshotResource(QueryResource):
     """Snapshot Endpoint"""
     query_class = Snapshot
-
 
 class IngestResource(BaseIngestResource):
     def ingest(self):
@@ -413,6 +159,31 @@ class InstanceResource(QueryResource):
     """Instance Endpoint"""
     query_class = Instance
 
+    def _latest_state(self):
+        """ Get full information of an instance
+
+            This includes its internal id, Instnace.openstack_id (server_id),
+            InstanceState.name(server), Hypervisor.name (hypervisor),
+            AvailabilityZone.name (az), Flavor.openstack_id (flavor),
+            Image.openstack_id (image), life span (span), linked
+            Account.openstack_id (account), Tenant.openstack_id (tenant).
+        """
+        parser = reqparse.RequestParser()
+        parser.add_argument("id", required=True)
+        parser.add_argument("start", type=int, default=0)
+        parser.add_argument("end", type=int, default=0)
+        args = parser.parse_args()
+
+        instance = Instance.query.get(args["id"])
+        return instance.latest_state(args["start"], args["end"])
+
+    @require_auth
+    def get(self):
+        args = QUERY_PARSER.parse_args()
+        if args["filter"]:
+            return super(InstanceResource, self).get()
+        else:
+            return self._latest_state()
 
 class InstanceStatusResource(QueryResource):
     """Instance Status Endpoint"""
@@ -427,6 +198,61 @@ class ImageResource(QueryResource):
 class InstanceStateResource(QueryResource):
     """Instance State Endpoint"""
     query_class = InstanceState
+
+
+class SummaryResource(Resource):
+    # TODO: consider to remove
+    def _query(self, start_ts, end_ts):
+        """Build a query to get a list of all instance status and hypervisor bewteen sart and end ts."""
+
+        # To use BaseQuery.paginate
+        query = BaseQuery([Snapshot, InstanceState, Instance, Hypervisor, Account, Tenant, Flavor], db.session()).\
+                  filter(Snapshot.ts >= start_ts, Snapshot.ts < end_ts).\
+                  filter(InstanceState.snapshot_id == Snapshot.id).\
+                  filter(Instance.id == InstanceState.instance_id).\
+                  filter(InstanceState.hypervisor_id == Hypervisor.id).\
+                  filter(Account.id == Instance.account_id).\
+                  filter(Tenant.id == Instance.tenant_id).\
+                  filter(Flavor.id == Instance.flavor_id).\
+                  with_entities(Snapshot.ts, Instance.openstack_id, InstanceState.name,
+                                Hypervisor.name, Account.openstack_id, Tenant.openstack_id,
+                                Instance.flavor_id)
+        return query
+
+    @require_auth
+    def get(self):
+        parser = reqparse.RequestParser()
+        parser.add_argument("start", type=int, required=True)
+        parser.add_argument("end", type=int, required=True)
+        parser.add_argument("distinct", type=bool, default=False)
+
+        args = parser.parse_args()
+        common_args = QUERY_PARSER.parse_args()
+
+        if args["distinct"]:
+            query = Summary(args["start"], args["end"]).query
+        else:
+            query = self._query(args["start"], args["end"])
+
+        result = {'total': 0, 'pages': 0, 'items': []}
+        try:
+            qp = query.paginate(common_args["page"], common_args["count"])
+            result['total'] = qp.total
+            result['pages'] = qp.pages
+            result['page'] = qp.page
+            if args["distinct"]:
+                result['items'] = [item[0] for item in qp.items]
+            else:
+                result['items'] = [{'ts': item[0], 'server_id': item[1], 'server': item[2],
+                                    'hypervisor': item[3], 'account': str(item[4]),
+                                    'tenant': str(item[5]), 'flavor': str(item[6])}
+                                    for item in qp.items]
+        except NotFound:
+            pass
+        except Exception as e:
+            logger.error("Query of summary failed. Detail: %s" % str(e))
+
+        return result
 
 
 class IPAddressMappingResource(QueryResource):
@@ -452,6 +278,7 @@ def setup():
         "/instance": InstanceResource,
         "/instance/status": InstanceStatusResource,
         "/instance/state": InstanceStateResource,
+        "/summary": SummaryResource,
         "/ip": IPAddressResource,
         "/mac": MACAddressResource,
         "/ip/mapping": IPAddressMappingResource,
