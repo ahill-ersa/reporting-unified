@@ -1,0 +1,13 @@
+arrow
+backports.ssl-match-hostname
+boto
+docker-py
+futures
+docker-py
+ipaddress
+python-dateutil
+requests
+six
+slackweb
+websocket-client
+wheel
