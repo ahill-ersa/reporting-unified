@@ -12,7 +12,7 @@ The package only works with PostgreSQL because it uses:
 0. activate env
 0. bin/ersa_reporting-prep ersa_reporting.PACKAGE
 
-## Deployment
+## Deployment - `ersa-reporting` package
 
 The package can be served by, for example, __nginx__ (proxy) + __gunicorn__.
 
@@ -25,6 +25,14 @@ which is listed below in the example of __hnas.conf__. It also can be generated 
 The log of an application is currently hard-coded to be saved in `/var/log/gunicorn/` which assumes `gunicorn` is configured to save logs to there.
 
 An application's log is named as ersa_reporting._application_.log, e.g. __'ersa_reporting.hnas.log'__.
+
+This package contains multiple applications. Main package `ersa_reporting`
+expects `config.py` to have relevant settings:
+* SQLALCHEMY_TRACK_MODIFICATIONS
+* SQLALCHEMY_DATABASE_URI
+* ERSA_REPORTING_PACKAGE
+* ERSA_AUTH_TOKEN
+
 
 One example shown here assumes package has been installed in `/usr/lib/ersa_reporting` in a virtual environment in `unified_api_env`
 and application `hnas` is being served by these commands:
@@ -56,6 +64,9 @@ loglevel = "info"
 
 ### Biller script
 
+Scripts are using different ways to set up their Flask applications compare
+to the main package `ersa_reporting`.
+
 This script is for generating bills directly. It needs credential for accessing
 Nectar Keystone. Different to other apps, it takes one extra configure file
 defined by the environment variable `APP_CONFIG_FILE`. It should contains
@@ -65,4 +76,45 @@ at least these two variables and others to override those in `config.py`:
 
 NECTAR_USER = "username"
 NECTAR_USER_PASS = "password"
+```
+
+## Development - `unified` package
+
+Tests are run through unittest package. Tests in `unified` need environment
+variables `APP_SETTINGS` and `auth_token`. This token is the development
+server token set in config file defined by `APP_SETTINGS`. See [example](config.py.example)
+for common settings for an API application.
+
+```
+python -m unittest usagebydb/tests/test_calculator.py
+python -m unittest usagebydb.tests.test_calculator.TestUsages.test_filename_of_usage_save
+python -m unittest unified.tests.test_swift
+```
+
+
+### run `unified` package
+`unified` package will replace `ersa-reporint` package. To run a dev server
+instance, set env variable `APP_SETTINGS`:
+
+```python
+# in python shell
+import time
+import os
+os.environ['APP_SETTINGS'] = 'config-xfs.py'
+from unified.models.xfs import Snapshot, Filesystem, Usage, Owner, Host
+start = time.time()
+x = Snapshot.summarise(1452930321, 1452676846)
+end = time.time()
+print(end - start)
+
+```
+
+```shell
+# run Flask dev server
+export APP_SETTINGS=config-xfs.py
+export FLASK_APP=unified/apis/xfs.py
+flask run -h 0.0.0.0 --reload
+
+# run Gunicorn
+gunicorn -e APP_SETTINGS=config-xfs.py --access-logfile - -b 0.0.0.0:5000 unified.apis.xfs:app
 ```

@@ -1,16 +1,16 @@
 """ An utility script for calculating usages of services """
 
 
+import os
 import sys
 import json
+import inspect
 import logging
-import requests
 import datetime
-
 
 from argparse import ArgumentParser
 
-import ersa_reporting.models
+import usage.types
 
 
 logging.basicConfig(format='%(asctime)s %(levelname)s: %(message)s', level=logging.DEBUG)
@@ -25,15 +25,14 @@ def parse_date_string(date_string):
     return int(datetime.datetime.strptime(date_string, '%Y%m%d').timestamp())
 
 
-class Users(object):
-    """ User relationship query through some source's RESTful APIs"""
+def read_conf(path):
+    # Check that the configuration file exists
+    if not os.path.isfile(path):
+        raise Exception("Config file %s cannot be found" % path)
 
-    def __init__(self, url, token=None):
-        self.end_point = url
-
-    def get(self):
-        j = requests.get(self.end_point).json()
-        logger.debug(j)
+    with open(path, 'r') as f:
+        conf = json.load(f)
+    return conf
 
 
 def get_links():
@@ -51,9 +50,9 @@ class Calculator(object):
 
     def link(self, usages):
         # get organisation, school, manager and link them to each calculated result
-        for usage in usages:
-            links = get_links(usage.contractor.id)
-            usage.update(links)
+        for u in usages:
+            links = get_links(u.contractor.id)
+            u.update(links)
         pass
 
     def save(self, file_name, usages):
@@ -64,13 +63,15 @@ class Calculator(object):
 
 if __name__ == '__main__':
     parser = ArgumentParser(description='Calculate usage of a service in a time interval.')
-    parser.add_argument('service', help='Name of service')
+    parser.add_argument('service', choices=['nova', 'hpc', 'xfs'], help='Name of service')
     parser.add_argument('-s', '--start', required=True, help='Start date of the interval')
     parser.add_argument('-e', '--end', required=True, help='End date of the interval')
+    parser.add_argument('--conf', default='config.json',
+                        help='Path to config.json. Default = config.json')
 
     args = parser.parse_args()
 
-    service = args.service
+    service = args.service.capitalize()
     start_date = args.start
     end_date = args.end
 
@@ -87,6 +88,14 @@ if __name__ == '__main__':
         sys.exit(0)
 
     logger.debug("Usage of %s in %d - %d" % (service, min_date, max_date))
+    config = read_conf(args.conf)
 
-    user_links = Users('http://144.6.236.232/bman/api/person/1/')
-    user_links.get()
+    import time
+    start = time.time()
+
+    cal_class = getattr(usage.types, service + 'Usage')
+    cal = cal_class(min_date, max_date, **config[service])
+    cal.calculate()
+
+    end = time.time()
+    logger.debug('Run time count: %d' % (end - start))
