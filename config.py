@@ -1,5 +1,6 @@
 # These should be set
-
+# import logging is for tests
+import logging
 ERSA_REPORTING_PACKAGE = "YOUR_DB"
 ERSA_AUTH_TOKEN = "sometoken"
 SQLALCHEMY_DATABASE_URI = "postgresql://apiuser:YOUR_PASS@localhost/YOUR_DB"

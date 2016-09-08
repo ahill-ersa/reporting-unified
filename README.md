@@ -78,6 +78,21 @@ NECTAR_USER = "username"
 NECTAR_USER_PASS = "password"
 ```
 
+### Usage
+
+Default config is `config.json`. You can use other by calling with `--conf`.
+There are two ways to define a time period for usage calculation:
+
+1. by year and month
+```python
+python calculator.py -y 2016 -m 8 nova
+```
+
+2. or by start and end:
+```python
+python calculator.py -s 20160801 -e 20160831 nova
+```
+
 ## Development - `unified` package
 
 Tests are run through unittest package. Tests in `unified` need environment
@@ -86,8 +101,8 @@ server token set in config file defined by `APP_SETTINGS`. See [example](config.
 for common settings for an API application.
 
 ```
-python -m unittest usagebydb/tests/test_calculator.py
-python -m unittest usagebydb.tests.test_calculator.TestUsages.test_filename_of_usage_save
+python -m unittest usage/tests/test_calculator.py
+python -m unittest usage.tests.test_calculator.TestUsages.test_filename_of_usage_save
 python -m unittest unified.tests.test_swift
 ```
 

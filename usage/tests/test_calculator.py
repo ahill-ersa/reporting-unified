@@ -1,11 +1,15 @@
+import os
 import unittest
 
-from usage.types import Usage
+os.environ['APP_SETTINGS'] = 'config.py'
 
+from ..types import NovaUsage
 
 class TestUsages(unittest.TestCase):
-    def test_usage_calculate_return_list(self):
-        # Test the base class which does nothing but defining interface
-        nova = Usage(1, 2)
-        usages = nova.calculate()
-        self.assertIsInstance(usages, list)
+    def test_filename_of_usage_save(self):
+        file_name = 'NovaUsage_1_2.json'
+        nova = NovaUsage(1, 2, None)
+        file_name = nova.save([])
+        self.assertEqual(file_name, file_name)
+        self.assertTrue(os.path.exists(file_name))
+        os.remove(file_name)
