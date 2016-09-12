@@ -7,8 +7,11 @@ import glob
 from setuptools import setup
 
 setup(name="ersa-reporting",
-      version="1.3.4",
-      install_requires=["flask>=0.10.1", "flask-restful", "flask-cors", "boto",
+      version="2.0.0",
+      install_requires=["flask>=0.10.1", "flask-restful", "flask-cors",
                         "flask-sqlalchemy", "psycopg2", "requests", "arrow"],
-      packages=["ersa_reporting"],
-      scripts=glob.glob("bin/ersa-reporting-*"))
+      packages=["unified", "unified.apis", "unified.models"],
+      scripts=["bin/gconf_generator.sh",
+               "bin/service_generator.sh",
+               "bin/ersa-reporting-prep-tables",
+               "bin/ersa-reporting-ingest"])

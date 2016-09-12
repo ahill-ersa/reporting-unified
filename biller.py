@@ -11,7 +11,7 @@ from flask.cli import FlaskGroup
 
 from ersa_reporting import app
 
-app.config.from_envvar('APP_CONFIG_FILE')
+app.config.from_envvar('APP_SETTINGS')
 
 # flask-sqlalchemy issue: multiple databases shared the same MetaData object
 # https://github.com/mitsuhiko/flask-sqlalchemy/pull/222
