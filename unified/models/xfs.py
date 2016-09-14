@@ -1,8 +1,14 @@
+from datetime import timedelta
 from sqlalchemy.sql import func
 from sqlalchemy import UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 
-from . import db, id_column
+from . import db, id_column, SnapshotMothods
+
+# Days between start_ts and end_ts to switch from filtering owner locally
+# to remotely in Owner.summarise. This is very ad-hoc and tested with
+# usage table of 28,054,534 rows
+CUT_OFF = 3
 
 
 class Owner(db.Model):
@@ -14,6 +20,71 @@ class Owner(db.Model):
     def json(self):
         """Jsonify"""
         return {"id": self.id, "name": self.name}
+
+    def _remote_filter(self, id_query):
+        # Do remote owner filter because planer can efficiently find
+        # relevant usage records
+        query = Usage.query.filter(Usage.snapshot_id.in_(id_query)).\
+            filter(Usage.owner_id == self.id).\
+            group_by(Usage.filesystem_id).\
+            with_entities(Usage.filesystem_id,
+                          func.max(Usage.soft).label('soft'),
+                          func.max(Usage.hard).label('hard'),
+                          func.max(Usage.usage).label('usage'))
+
+        fq = Filesystem.query.join(Host).\
+            with_entities(Filesystem.id, Host.name, Filesystem.name).all()
+        file_systems = {}
+        for fs in fq:
+            file_systems[fs[0]] = fs[1:]
+
+        fields = ['host', 'filesystem', 'soft', 'hard', 'usage']
+        rslt = []
+
+        for q in query.all():
+            hn, fn = file_systems[q[0]]
+            mappings = (hn, fn, q[1], q[2], q[3])
+            rslt.append(dict(zip(fields, mappings)))
+        return rslt
+
+    def _local_filter(self, id_query):
+        # Do local owner filter because planer chooses to use bitmapAnd when
+        # fewer snapshots involved which is slow
+        query = Usage.query.filter(Usage.snapshot_id.in_(id_query)).\
+            group_by(Usage.owner_id, Usage.filesystem_id).\
+            with_entities(Usage.owner_id, Usage.filesystem_id,
+                          func.max(Usage.soft).label('soft'),
+                          func.max(Usage.hard).label('hard'),
+                          func.max(Usage.usage).label('usage'))
+
+        fq = Filesystem.query.join(Host).\
+            with_entities(Filesystem.id, Host.name, Filesystem.name).all()
+        file_systems = {}
+        for fs in fq:
+            file_systems[fs[0]] = fs[1:]
+
+        fields = ['host', 'filesystem', 'soft', 'hard', 'usage']
+        rslt = []
+
+        for q in query.all():
+            if q[0] == self.id:
+                hn, fn = file_systems[q[1]]
+                mappings = (hn, fn, q[2], q[3], q[4])
+                rslt.append(dict(zip(fields, mappings)))
+        return rslt
+
+    def summarise(self, start_ts=0, end_ts=0):
+        """"Gets usage of an owner between start_ts and end_ts.
+
+        Maximal usage of the period is returned. Grouped by filesystem
+        """
+        id_query = Snapshot.id_between(start_ts, end_ts)
+        date_window = timedelta(seconds=(end_ts - start_ts))
+
+        if date_window.total_seconds() == 0 or abs(date_window.days) >= CUT_OFF:
+            return self._remote_filter(id_query)
+        else:
+            return self._local_filter(id_query)
 
 
 class Host(db.Model):
@@ -90,49 +161,17 @@ class Usage(db.Model):
             "usage": self.usage
         }
 
-
-class Snapshot(db.Model):
-    """Storage Snapshot"""
-    id = id_column()
-    ts = db.Column(db.Integer, nullable=False)
-    usage = db.relationship("Usage", backref="snapshot")
-    host_id = db.Column(None, db.ForeignKey("host.id"), nullable=False)
-    message = db.Column(UUID, nullable=False, unique=True)
-
-    def json(self):
-        """Jsonify"""
-
-        return {
-            "id": self.id,
-            "ts": self.ts,
-            "host": self.host_id,
-            "message": self.message
-        }
-
-    @classmethod
-    def id_between(cls, start_ts=0, end_ts=0):
-        """"Gets snapshop ids between start_ts and end_ts.
-
-        It returns a subquery not actual values.
-        """
-        id_query = cls.query
-        if start_ts > 0:
-            id_query = id_query.filter(Snapshot.ts >= start_ts)
-        if end_ts > 0:
-            id_query = id_query.filter(Snapshot.ts < end_ts)
-        return id_query.with_entities(Snapshot.id).subquery()
-
     @classmethod
     def summarise(cls, start_ts=0, end_ts=0):
         """"Gets usage from their snapshots between start_ts and end_ts.
 
         Maximal usage of the period is returned.
         """
-        id_query = cls.id_between(start_ts, end_ts)
+        id_query = Snapshot.id_between(start_ts, end_ts)
 
-        # soft and hard quotas are not changed very often
-        # Record number of Host, Filesystem and Owner are relatively very small.
-        # Link them in code to avoid expand usage rows whose number is very very high
+        # 1. soft and hard quotas are not changed very often
+        # 2. Record number of Host, Filesystem and Owner are relatively very small,
+        # link them in code to avoid expand usage rows whose number is very very high
         query = Usage.query.filter(Usage.snapshot_id.in_(id_query)).\
             group_by(Usage.filesystem_id, Usage.owner_id).\
             with_entities(Usage.filesystem_id, Usage.owner_id,
@@ -156,3 +195,22 @@ class Snapshot(db.Model):
             mappings = (hn, fn, owners[q[1]], q[2], q[3], q[4])
             rslt.append(dict(zip(fields, mappings)))
         return rslt
+
+
+class Snapshot(db.Model, SnapshotMothods):
+    """Storage Snapshot"""
+    id = id_column()
+    ts = db.Column(db.Integer, nullable=False)
+    usage = db.relationship("Usage", backref="snapshot")
+    host_id = db.Column(None, db.ForeignKey("host.id"), nullable=False)
+    message = db.Column(UUID, nullable=False, unique=True)
+
+    def json(self):
+        """Jsonify"""
+
+        return {
+            "id": self.id,
+            "ts": self.ts,
+            "host": self.host_id,
+            "message": self.message
+        }

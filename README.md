@@ -197,5 +197,6 @@ development server token set in config file set by `APP_SETTINGS` by
 ```
 python -m unittest usage/tests/test_calculator.py
 python -m unittest usage.tests.test_calculator.TestUsages.test_filename_of_usage_save
-python -m unittest unified.tests.test_swift
+python -m unittest unified.models.tests.test_xfs
+python -m unittest unified.tests.test_xfs
 ```

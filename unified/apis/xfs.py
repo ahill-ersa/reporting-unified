@@ -6,8 +6,7 @@ from . import app, configure, request
 from . import db, get_or_create, commit
 from . import QueryResource, BaseIngestResource, RangeQuery
 
-from ..models.xfs import (
-    Snapshot, Host, Filesystem, Owner, Usage)
+from ..models.xfs import Snapshot, Host, Filesystem, Owner, Usage
 
 
 class SnapshotResource(QueryResource):
@@ -92,9 +91,9 @@ class IngestResource(BaseIngestResource):
         return "", 204
 
 
-class SnapshotSummary(RangeQuery):
+class UsageSummary(RangeQuery):
     def _get(self, **kwargs):
-        return Snapshot.summarise(start_ts=kwargs['start'], end_ts=kwargs['end'])
+        return Usage.summarise(start_ts=kwargs['start'], end_ts=kwargs['end'])
 
 
 class FilesystemSummary(RangeQuery):
@@ -115,12 +114,12 @@ def setup():
     """Let's roll."""
     resources = {
         "/snapshot": SnapshotResource,
-        "/snapshot/summary": SnapshotSummary,
         "/host": HostResource,
         "/filesystem": FilesystemResource,
         "/filesystem/<id>/summary": FilesystemSummary,
         "/owner": OwnerResource,
         "/usage": UsageResource,
+        "/usage/summary": UsageSummary,
         "/ingest": IngestResource
     }
 

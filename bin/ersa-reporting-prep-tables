@@ -5,10 +5,8 @@
 import os
 import sys
 
-config = os.getenv('APP_SETTINGS', None)
-if config is None:
-    print("Please set config file in environment variable APP_SETTINGS")
-    sys.exit(1)
+if 'APP_SETTINGS' not in os.environ:
+    sys.exit('Please set config file in environment variable APP_SETTINGS')
 
 if len(sys.argv) != 2:
     print("args: package. e.g. nova")

@@ -1,14 +1,14 @@
 import re
+import uuid
 import arrow
 
 from functools import lru_cache
 
 from . import app, configure, request
 from . import get_or_create, commit, add
-from . import QueryResource, BaseIngestResource
+from . import QueryResource, BaseIngestResource, RangeQuery
 
-from ..models.hcp import (
-    Snapshot, Allocation, Tenant, Namespace, Usage)
+from ..models.hcp import Snapshot, Allocation, Tenant, Namespace, Usage
 
 ALPHA_PREFIX = re.compile("^[A-Za-z]+")
 
@@ -25,12 +25,31 @@ class TenantResource(QueryResource):
     query_class = Tenant
 
 
+class TenantSummary(RangeQuery):
+    def _get(self, id='', **kwargs):
+        rslt = []
+        try:
+            uuid.UUID(id)
+        except:
+            return rslt
+
+        tenant = Tenant.query.get(id)
+        if tenant:
+            rslt = tenant.summarise(start_ts=kwargs['start'], end_ts=kwargs['end'])
+        return rslt
+
+
 class NamespaceResource(QueryResource):
     query_class = Namespace
 
 
 class UsageResource(QueryResource):
     query_class = Usage
+
+
+class UsageSummary(RangeQuery):
+    def _get(self, **kwargs):
+        return Usage.summarise(start_ts=kwargs['start'], end_ts=kwargs['end'])
 
 
 def extract_allocation(name):
@@ -147,8 +166,10 @@ def setup():
         "/snapshot": SnapshotResource,
         "/allocation": AllocationResource,
         "/tenant": TenantResource,
+        "/tenant/<id>/summary": TenantSummary,
         "/namespace": NamespaceResource,
         "/usage": UsageResource,
+        "/usage/summary": UsageSummary,
         "/ingest": IngestResource
     }
 

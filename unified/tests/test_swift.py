@@ -2,7 +2,7 @@ import unittest
 from flask import json
 
 from ..apis.swift import app
-from . import client_get
+from . import client_get, now, now_minus_24hrs
 
 get = client_get(app)
 
@@ -23,3 +23,10 @@ class SwiftTestCase(unittest.TestCase):
                 data = json.loads(resp.data)
                 self.assertEqual(resp.status_code, 200)
                 self.assertGreaterEqual(len(data), 1)
+
+    def test_usage_summary(self):
+        resp = get('/usage/summary?start=%s&end=%s' % (now_minus_24hrs, now))
+        self.assertEqual(resp.status_code, 200)
+        data = json.loads(resp.data)
+        self.assertTrue(isinstance(data, list))
+        print(data)

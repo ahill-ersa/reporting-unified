@@ -1,4 +1,10 @@
 import os
+import time
+import datetime
+
+
+now = int(time.time())
+now_minus_24hrs = int(now - datetime.timedelta(days=1).total_seconds())
 
 HEADERS = {'x-ersa-auth-token': os.environ['auth_token']}
 

@@ -4,10 +4,9 @@ from functools import lru_cache, reduce
 
 from . import app, configure, request
 from . import add, get_or_create, commit
-from . import QueryResource, BaseIngestResource
+from . import QueryResource, BaseIngestResource, RangeQuery
 
-from ..models.swift import (
-    Snapshot, Account, Usage)
+from ..models.swift import Snapshot, Account, Usage
 
 
 class SnapshotResource(QueryResource):
@@ -53,6 +52,11 @@ class IngestResource(BaseIngestResource):
         return "", 204
 
 
+class UsageSummary(RangeQuery):
+    def _get(self, **kwargs):
+        return Usage.summarise(start_ts=kwargs['start'], end_ts=kwargs['end'])
+
+
 def setup():
     """Let's roll."""
 
@@ -60,6 +64,7 @@ def setup():
         "/snapshot": SnapshotResource,
         "/account": AccountResource,
         "/usage": UsageResource,
+        "/usage/summary": UsageSummary,
         "/ingest": IngestResource
     }
 

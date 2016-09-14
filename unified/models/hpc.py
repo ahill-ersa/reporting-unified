@@ -1,3 +1,4 @@
+from sqlalchemy.sql import func
 from . import db, id_column
 
 
@@ -11,6 +12,25 @@ class Owner(db.Model):
         """Jsonify"""
         return {"id": self.id, "name": self.name}
 
+    def summarise(self, start_ts=0, end_ts=0):
+        """"Gets job statistics of which finished between start_ts and end_ts.
+
+        Grouped by queue
+        """
+        id_query = Job.id_between(start_ts, end_ts)
+
+        query = self.query.join(Job).join(Queue).\
+            filter(Job.id.in_(id_query)).\
+            filter(Job.owner_id == self.id).\
+            group_by(Queue.name).\
+            with_entities(Queue.name,
+                          func.count(Job.job_id),
+                          func.sum(Job.cores),
+                          func.sum(Job.cpu_seconds))
+
+        fields = ['queue', 'job_count', 'cores', 'cpu_seconds']
+        return [dict(zip(fields, q)) for q in query.all()]
+
 
 class Host(db.Model):
     """HPC Host"""
@@ -21,6 +41,27 @@ class Host(db.Model):
     def json(self):
         """Jsonify"""
         return {"id": self.id, "name": self.name}
+
+    def summarise(self, start_ts=0, end_ts=0):
+        """"Gets job statistics of which finished between start_ts and end_ts.
+        """
+        id_query = Job.id_between(start_ts, end_ts)
+
+        allocated_jobs = Allocation.query.\
+            filter(Allocation.host_id == self.id).\
+            with_entities(Allocation.job_id).subquery()
+
+        query = Job.query.filter(Job.id.in_(id_query)).\
+            filter(Job.id.in_(allocated_jobs)).\
+            with_entities(func.count(Job.job_id),
+                          func.sum(Job.cores),
+                          func.sum(Job.cpu_seconds))
+
+        values = query.first()
+        if values[0]:
+            return dict(zip(['job_count', 'cores', 'cpu_seconds'], values))
+        else:
+            return {}
 
 
 class Queue(db.Model):
@@ -62,17 +103,53 @@ class Job(db.Model):
         }
 
     @classmethod
+    def id_between(cls, start_ts=0, end_ts=0):
+        """"Gets snapshot ids between start_ts and end_ts.
+
+        It returns a subquery not actual values.
+        """
+        id_query = cls.query
+        if start_ts > 0:
+            id_query = id_query.filter(Job.end >= start_ts)
+        if end_ts > 0:
+            id_query = id_query.filter(Job.end < end_ts)
+        return id_query.with_entities(cls.id).subquery()
+
+    @classmethod
     def list(cls, start_ts=0, end_ts=0):
         """"Gets jobs finished between start_ts and end_ts.
         """
         query = cls.query.join(Owner).join(Queue).\
-            with_entities(Queue.name, Owner.name, Job.job_id, Job.cores, Job.cpu_seconds)
+            with_entities(Job.job_id, Job.name,
+                          Queue.name, Owner.name,
+                          Job.start, Job.end,
+                          Job.cores, Job.cpu_seconds)
 
         if start_ts > 0:
             query = query.filter(Job.end >= start_ts)
         if end_ts > 0:
             query = query.filter(Job.end < end_ts)
-        fields = ['queue', 'owner', 'job_id', 'cores', 'cpu_seconds']
+        fields = ['job_id', 'name', 'queue', 'owner', 'start',
+                  'end', 'cores', 'cpu_seconds']
+        return [dict(zip(fields, q)) for q in query.all()]
+
+    @classmethod
+    def summarise(cls, start_ts=0, end_ts=0):
+        """"Gets job statistics of which finished between start_ts and end_ts.
+
+        Grouped by owner then queue
+        """
+        id_query = cls.id_between(start_ts, end_ts)
+
+        query = cls.query.join(Owner).join(Queue).\
+            filter(cls.id.in_(id_query)).\
+            group_by(Owner.name, Queue.name).\
+            with_entities(Owner.name, Queue.name,
+                          func.count(Job.job_id),
+                          func.sum(Job.cores),
+                          func.sum(Job.cpu_seconds))
+
+        fields = ['owner', 'queue', 'job_count', 'cores', 'cpu_seconds']
         return [dict(zip(fields, q)) for q in query.all()]
 
 
@@ -91,3 +168,40 @@ class Allocation(db.Model):
             "host": self.host_id,
             "cores": self.cores
         }
+
+    @classmethod
+    def summarise(cls, start_ts=0, end_ts=0):
+        """"Gets job statistics finished between start_ts and end_ts.
+
+        Grouped by host
+        """
+        id_query = Job.id_between(start_ts, end_ts)
+
+        query = cls.query.join(Host).\
+            filter(cls.job_id.in_(id_query)).\
+            group_by(Host.name).\
+            with_entities(Host.name,
+                          func.count(cls.job_id),
+                          func.sum(cls.cores))
+
+        fields = ['host', 'job_count', 'cores']
+        return [dict(zip(fields, q)) for q in query.all()]
+
+    @classmethod
+    def summarise_runtime(cls, start_ts=0, end_ts=0):
+        """"Gets job run statistics finished between start_ts and end_ts.
+
+        Similar to summarise but includes run time. Grouped by host
+        """
+        id_query = Job.id_between(start_ts, end_ts)
+
+        query = cls.query.join(Host).join(Job).\
+            filter(cls.job_id.in_(id_query)).\
+            group_by(Host.name).\
+            with_entities(Host.name,
+                          func.count(cls.job_id),
+                          func.sum(cls.cores),
+                          func.sum(Job.cpu_seconds))
+
+        fields = ['host', 'job_count', 'cores', 'cpu_seconds']
+        return [dict(zip(fields, q)) for q in query.all()]

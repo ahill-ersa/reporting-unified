@@ -1,10 +1,9 @@
+import uuid
 from . import app, configure, request
 from . import get_or_create, commit
-from . import QueryResource, BaseIngestResource
+from . import QueryResource, BaseIngestResource, RangeQuery
 
-from ..models.hpc import (
-    Queue, Host, Owner, Allocation, Job
-)
+from ..models.hpc import Queue, Host, Owner, Allocation, Job
 
 
 class QueueResource(QueryResource):
@@ -17,9 +16,37 @@ class HostResource(QueryResource):
     query_class = Host
 
 
+class HostSummary(RangeQuery):
+    def _get(self, id='', **kwargs):
+        try:
+            uuid.UUID(id)
+        except:
+            return {}
+
+        rslt = {}
+        host = Host.query.get(id)
+        if host:
+            rslt = host.summarise(start_ts=kwargs['start'], end_ts=kwargs['end'])
+        return rslt
+
+
 class OwnerResource(QueryResource):
     """HPC Job Owner"""
     query_class = Owner
+
+
+class OwnerSummary(RangeQuery):
+    def _get(self, id='', **kwargs):
+        try:
+            uuid.UUID(id)
+        except:
+            return []
+
+        rslt = []
+        owner = Owner.query.get(id)
+        if owner:
+            rslt = owner.summarise(start_ts=kwargs['start'], end_ts=kwargs['end'])
+        return rslt
 
 
 class AllocationResource(QueryResource):
@@ -27,9 +54,33 @@ class AllocationResource(QueryResource):
     query_class = Allocation
 
 
+class AllocationSummary(RangeQuery):
+    def _get(self, **kwargs):
+        return Allocation.summarise(start_ts=kwargs['start'], end_ts=kwargs['end'])
+
+
+class AllocationRuntimeSummary(RangeQuery):
+    """Gets job run statistics finished between start_ts and end_ts.
+
+    Similar to AllocationSummary but includes run time. Grouped by host
+    """
+    def _get(self, **kwargs):
+        return Allocation.summarise_runtime(start_ts=kwargs['start'], end_ts=kwargs['end'])
+
+
 class JobResource(QueryResource):
     """HPC Job"""
     query_class = Job
+
+
+class JobList(RangeQuery):
+    def _get(self, **kwargs):
+        return Job.list(start_ts=kwargs['start'], end_ts=kwargs['end'])
+
+
+class JobSummary(RangeQuery):
+    def _get(self, **kwargs):
+        return Job.summarise(start_ts=kwargs['start'], end_ts=kwargs['end'])
 
 
 class IngestResource(BaseIngestResource):
@@ -73,10 +124,16 @@ def setup():
 
     resources = {
         "/host": HostResource,
+        "/host/<id>/summary": HostSummary,
         "/queue": QueueResource,
         "/owner": OwnerResource,
+        "/owner/<id>/summary": OwnerSummary,
         "/job": JobResource,
+        "/job/list": JobList,
+        "/job/summary": JobSummary,
         "/allocation": AllocationResource,
+        "/allocation/summary": AllocationSummary,
+        "/allocation/runtime/summary": AllocationRuntimeSummary,
         "/ingest": IngestResource
     }
 

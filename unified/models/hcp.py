@@ -1,4 +1,5 @@
-from . import db, id_column, to_dict
+from sqlalchemy.sql import func
+from . import db, id_column, to_dict, SnapshotMothods
 
 
 class Allocation(db.Model):
@@ -13,7 +14,7 @@ class Allocation(db.Model):
         return to_dict(self, ["allocation"])
 
 
-class Snapshot(db.Model):
+class Snapshot(db.Model, SnapshotMothods):
     """Storage Snapshot"""
     id = id_column()
     ts = db.Column(db.Integer, nullable=False)
@@ -34,6 +35,47 @@ class Tenant(db.Model):
     def json(self):
         """JSON"""
         return to_dict(self, ["name", "allocation_id"])
+
+    def summarise(self, start_ts=0, end_ts=0):
+        """"Gets usages of a tenant between start_ts and end_ts.
+
+        Maximal usage of the period is returned.
+        """
+        id_query = Snapshot.id_between(start_ts, end_ts)
+
+        namespaces = dict(
+            Namespace.query.filter(Namespace.tenant_id == self.id).
+            with_entities(Namespace.id, Namespace.name).all())
+        namespace_ids = namespaces.keys()
+
+        query = Usage.query.filter(Usage.snapshot_id.in_(id_query)).\
+            filter(Usage.namespace_id.in_(namespace_ids)).\
+            group_by(Usage.namespace_id).\
+            with_entities(Usage.namespace_id,
+                          func.max(Usage.ingested_bytes),
+                          func.max(Usage.raw_bytes),
+                          func.max(Usage.reads),
+                          func.max(Usage.writes),
+                          func.max(Usage.deletes),
+                          func.max(Usage.objects),
+                          func.max(Usage.bytes_in),
+                          func.max(Usage.bytes_out),
+                          func.max(Usage.metadata_only_objects),
+                          func.max(Usage.metadata_only_bytes),
+                          func.max(Usage.tiered_objects),
+                          func.max(Usage.tiered_bytes))
+
+        fields = ['namespace', 'ingested_bytes', 'raw_bytes', 'reads',
+                  'writes', 'deletes', 'objects', 'bytes_in', 'bytes_out',
+                  'metadata_only_objects', 'metadata_only_bytes',
+                  'tiered_objects', 'tiered_bytes']
+        rslt = []
+
+        for q in query.all():
+            mappings = [namespaces[q[0]]]
+            mappings.extend(q[1:])
+            rslt.append(dict(zip(fields, mappings)))
+        return rslt
 
 
 class Namespace(db.Model):
@@ -89,3 +131,41 @@ class Usage(db.Model):
              "writes", "deletes", "objects", "bytes_in", "bytes_out",
              "metadata_only_objects", "metadata_only_bytes", "tiered_objects",
              "tiered_bytes", "snapshot_id", "namespace_id"])
+
+    @classmethod
+    def summarise(cls, start_ts=0, end_ts=0):
+        """"Gets usages between start_ts and end_ts.
+
+        Maximal usage of the period is returned.
+        """
+        id_query = Snapshot.id_between(start_ts, end_ts)
+
+        query = cls.query.filter(cls.snapshot_id.in_(id_query)).\
+            group_by(cls.namespace_id).\
+            with_entities(cls.namespace_id,
+                          func.max(cls.ingested_bytes),
+                          func.max(cls.raw_bytes),
+                          func.max(cls.reads),
+                          func.max(cls.writes),
+                          func.max(cls.deletes),
+                          func.max(cls.objects),
+                          func.max(cls.bytes_in),
+                          func.max(cls.bytes_out),
+                          func.max(cls.metadata_only_objects),
+                          func.max(cls.metadata_only_bytes),
+                          func.max(cls.tiered_objects),
+                          func.max(cls.tiered_bytes))
+
+        namespaces = dict(Namespace.query.with_entities(Namespace.id, Namespace.name).all())
+
+        fields = ['namespace', 'ingested_bytes', 'raw_bytes', 'reads',
+                  'writes', 'deletes', 'objects', 'bytes_in', 'bytes_out',
+                  'metadata_only_objects', 'metadata_only_bytes',
+                  'tiered_objects', 'tiered_bytes']
+        rslt = []
+
+        for q in query.all():
+            mappings = [namespaces[q[0]]]
+            mappings.extend(q[1:])
+            rslt.append(dict(zip(fields, mappings)))
+        return rslt

@@ -2,7 +2,7 @@ import unittest
 from flask import json
 
 from ..apis.xfs import app
-from . import client_get
+from . import client_get, now, now_minus_24hrs
 
 get = client_get(app)
 
@@ -17,7 +17,7 @@ class XFSTestCase(unittest.TestCase):
             rule = route.rule
             # top objects' have pattern of /blar
             # ingest only accept PUT and OPTIONS
-            if rule not in ('/static/<path:filename>', '/ingest', '/snapshot/summary', '/filesystem/<id>/summary'):
+            if rule not in ('/static/<path:filename>', '/ingest', '/usage/summary', '/filesystem/<id>/summary'):
                 print('Testing %s' % rule)
                 resp = get('%s?count=10' % rule)
                 data = json.loads(resp.data)
@@ -37,3 +37,25 @@ class XFSTestCase(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         data = json.loads(resp.data)
         self.assertEqual(len(data), 0)
+
+    def test_usage_summary(self):
+        resp = get('/usage/summary?start=%s&end=%s' % (now_minus_24hrs, now))
+        self.assertEqual(resp.status_code, 200)
+        data = json.loads(resp.data)
+        self.assertTrue(isinstance(data, list))
+        print(data)
+
+    def test_filesystem(self):
+        resp = get('/filesystem?count=1')
+        self.assertEqual(resp.status_code, 200)
+        data = json.loads(resp.data)
+        self.assertTrue(isinstance(data, list))
+        self.assertGreater(len(data), 0)
+        print(data)
+
+        resp = get('/filesystem/%s/summary' % data[0]['id'])
+        self.assertEqual(resp.status_code, 200)
+        data = json.loads(resp.data)
+        self.assertTrue(isinstance(data, list))
+        self.assertGreater(len(data), 0)
+        print(data)

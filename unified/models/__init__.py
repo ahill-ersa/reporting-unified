@@ -43,3 +43,19 @@ class Input(db.Model):
     def json(self):
         """Jsonify"""
         return {"id": self.id, "name": self.name}
+
+
+class SnapshotMothods(object):
+    """Mixin for Snapshot"""
+    @classmethod
+    def id_between(cls, start_ts=0, end_ts=0):
+        """"Gets snapshop ids between start_ts and end_ts.
+
+        It returns a subquery not actual values.
+        """
+        id_query = cls.query
+        if start_ts > 0:
+            id_query = id_query.filter(cls.ts >= start_ts)
+        if end_ts > 0:
+            id_query = id_query.filter(cls.ts < end_ts)
+        return id_query.with_entities(cls.id).subquery()

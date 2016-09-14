@@ -1,8 +1,9 @@
+import uuid
 from functools import lru_cache
 
 from . import app, configure, request
 from . import add, get_or_create, commit
-from . import QueryResource, BaseIngestResource
+from . import QueryResource, BaseIngestResource, RangeQuery
 
 from ..models.hnas import (
     Snapshot, Owner, Filesystem, VirtualVolume, FilesystemUsage, VirtualVolumeUsage)
@@ -20,16 +21,54 @@ class FilesystemResource(QueryResource):
     query_class = Filesystem
 
 
+class FilesystemSummary(RangeQuery):
+    def _get(self, id='', **kwargs):
+        try:
+            uuid.UUID(id)
+        except:
+            return {}
+
+        rslt = {}
+        fs = Filesystem.query.get(id)
+        if fs:
+            rslt = fs.summarise(start_ts=kwargs['start'], end_ts=kwargs['end'])
+        return rslt
+
+
 class VirtualVolumeResource(QueryResource):
     query_class = VirtualVolume
+
+
+class VirtualVolumeSummary(RangeQuery):
+    def _get(self, id='', **kwargs):
+        try:
+            uuid.UUID(id)
+        except:
+            return []
+
+        rslt = []
+        vv = VirtualVolume.query.get(id)
+        if vv:
+            rslt = vv.summarise(start_ts=kwargs['start'], end_ts=kwargs['end'])
+        return rslt
 
 
 class FilesystemUsageResource(QueryResource):
     query_class = FilesystemUsage
 
 
+class FilesystemUsageSummary(RangeQuery):
+    def _get(self, **kwargs):
+        return FilesystemUsage.summarise(start_ts=kwargs['start'], end_ts=kwargs['end'])
+
+
 class VirtualVolumeUsageResource(QueryResource):
     query_class = VirtualVolumeUsage
+
+
+class VirtualVolumeUsageSummary(RangeQuery):
+    def _get(self, **kwargs):
+        return VirtualVolumeUsage.summarise(start_ts=kwargs['start'], end_ts=kwargs['end'])
 
 
 class IngestResource(BaseIngestResource):
@@ -98,9 +137,13 @@ def setup():
         "/owner": OwnerResource,
         "/snapshot": SnapshotResource,
         "/filesystem": FilesystemResource,
+        "/filesystem/<id>/summary": FilesystemSummary,
         "/virtual-volume": VirtualVolumeResource,
+        "/virtual-volume/<id>/summary": VirtualVolumeSummary,
         "/filesystem/usage": FilesystemUsageResource,
+        "/filesystem/usage/summary": FilesystemUsageSummary,
         "/virtual-volume/usage": VirtualVolumeUsageResource,
+        "/virtual-volume/usage/summary": VirtualVolumeUsageSummary,
         "/ingest": IngestResource
     }
 
