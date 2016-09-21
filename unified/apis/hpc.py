@@ -1,5 +1,4 @@
-import uuid
-from . import app, configure, request
+from . import app, configure, request, instance_method
 from . import get_or_create, commit
 from . import QueryResource, BaseIngestResource, RangeQuery
 
@@ -18,16 +17,10 @@ class HostResource(QueryResource):
 
 class HostSummary(RangeQuery):
     def _get(self, id='', **kwargs):
-        try:
-            uuid.UUID(id)
-        except:
-            return {}
-
-        rslt = {}
-        host = Host.query.get(id)
-        if host:
-            rslt = host.summarise(start_ts=kwargs['start'], end_ts=kwargs['end'])
-        return rslt
+        return instance_method(Host, 'summarise', id,
+                               default={},
+                               start_ts=kwargs['start'],
+                               end_ts=kwargs['end'])
 
 
 class OwnerResource(QueryResource):
@@ -37,16 +30,9 @@ class OwnerResource(QueryResource):
 
 class OwnerSummary(RangeQuery):
     def _get(self, id='', **kwargs):
-        try:
-            uuid.UUID(id)
-        except:
-            return []
-
-        rslt = []
-        owner = Owner.query.get(id)
-        if owner:
-            rslt = owner.summarise(start_ts=kwargs['start'], end_ts=kwargs['end'])
-        return rslt
+        return instance_method(Owner, 'summarise', id,
+                               start_ts=kwargs['start'],
+                               end_ts=kwargs['end'])
 
 
 class AllocationResource(QueryResource):

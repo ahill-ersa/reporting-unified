@@ -5,12 +5,12 @@ from ...tests import now, now_minus_24hrs
 
 
 class FilesystemTestCase(unittest.TestCase):
-    def test_now(self):
+    def test_summarise_now(self):
         fs = Filesystem.query.first()
         rslt = fs.summarise(now)
         self.assertEqual(rslt, {})
 
-    def test_now_minus_24hrs(self):
+    def test_summarise_now_minus_24hrs(self):
         fss = Filesystem.query.limit(10)
         for fs in fss:
             rslt = fs.summarise(now_minus_24hrs, now)
@@ -20,14 +20,22 @@ class FilesystemTestCase(unittest.TestCase):
                 for v in rslt.values():
                     self.assertIsNotNone(v)
 
+    def test_list_now_minus_24hrs(self):
+        fss = Filesystem.query.limit(10)
+        for fs in fss:
+            print(fs.name)
+            rslt = fs.list(now_minus_24hrs, now)
+            print(rslt)
+            self.assertTrue(isinstance(rslt, list))
+
 
 class VirtualVolumeTestCase(unittest.TestCase):
-    def test_now(self):
+    def test_summary_now(self):
         vv = VirtualVolume.query.first()
         rslt = vv.summarise(now)
         self.assertEqual(rslt, [])
 
-    def test_now_minus_24hrs(self):
+    def test_summary_now_minus_24hrs(self):
         vvs = VirtualVolume.query.limit(10)
         for vv in vvs:
             rslt = vv.summarise(now_minus_24hrs, now)
@@ -37,7 +45,7 @@ class VirtualVolumeTestCase(unittest.TestCase):
                 for usage in rslt:
                     self.assertIsNotNone(usage)
 
-    def test_with_owners(self):
+    def test_summary_with_owners(self):
         # This is the only special one, hard coded until a better one found
         vv = VirtualVolume.query.get('1f6f5fce-67e0-45b2-b157-68ae7f707c22')
         if vv:
@@ -45,6 +53,18 @@ class VirtualVolumeTestCase(unittest.TestCase):
             self.assertTrue(isinstance(rslt, list))
             for usage in rslt:
                 self.assertTrue(isinstance(usage, dict))
+
+    def test_list_now_minus_24hrs(self):
+        vvs = VirtualVolume.query.limit(10)
+        for vv in vvs:
+            print(vv.name)
+            rslt = vv.list(now_minus_24hrs, now)
+            print(rslt)
+            self.assertTrue(isinstance(rslt, dict))
+            if rslt:
+                self.assertIsNot(rslt, {})
+                for usage in rslt:
+                    self.assertIsNotNone(usage)
 
 
 class FSUSummaryTestCase(unittest.TestCase):

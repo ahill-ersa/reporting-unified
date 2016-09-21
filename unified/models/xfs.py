@@ -21,6 +21,18 @@ class Owner(db.Model):
         """Jsonify"""
         return {"id": self.id, "name": self.name}
 
+    @classmethod
+    def _get_file_systems(cls):
+        """Get a dict with filesystem id as keys and host and filesystem names as values"""
+        if not hasattr(cls, '_fs_dict'):
+            fq = Filesystem.query.join(Host).\
+                with_entities(Filesystem.id, Host.name, Filesystem.name).all()
+            cls._fs_dict = {}
+            for fs in fq:
+                cls._fs_dict[fs[0]] = fs[1:]
+
+        return cls._fs_dict
+
     def _remote_filter(self, id_query):
         # Do remote owner filter because planer can efficiently find
         # relevant usage records
@@ -32,13 +44,8 @@ class Owner(db.Model):
                           func.max(Usage.hard).label('hard'),
                           func.max(Usage.usage).label('usage'))
 
-        fq = Filesystem.query.join(Host).\
-            with_entities(Filesystem.id, Host.name, Filesystem.name).all()
-        file_systems = {}
-        for fs in fq:
-            file_systems[fs[0]] = fs[1:]
-
         fields = ['host', 'filesystem', 'soft', 'hard', 'usage']
+        file_systems = self._get_file_systems()
         rslt = []
 
         for q in query.all():
@@ -57,13 +64,8 @@ class Owner(db.Model):
                           func.max(Usage.hard).label('hard'),
                           func.max(Usage.usage).label('usage'))
 
-        fq = Filesystem.query.join(Host).\
-            with_entities(Filesystem.id, Host.name, Filesystem.name).all()
-        file_systems = {}
-        for fs in fq:
-            file_systems[fs[0]] = fs[1:]
-
         fields = ['host', 'filesystem', 'soft', 'hard', 'usage']
+        file_systems = self._get_file_systems()
         rslt = []
 
         for q in query.all():
@@ -71,6 +73,7 @@ class Owner(db.Model):
                 hn, fn = file_systems[q[1]]
                 mappings = (hn, fn, q[2], q[3], q[4])
                 rslt.append(dict(zip(fields, mappings)))
+                break
         return rslt
 
     def summarise(self, start_ts=0, end_ts=0):
@@ -85,6 +88,31 @@ class Owner(db.Model):
             return self._remote_filter(id_query)
         else:
             return self._local_filter(id_query)
+
+    def list(self, start_ts=0, end_ts=0):
+        """"Gets a list of usages between start_ts and end_ts.
+        """
+        snapshots = Snapshot.between(start_ts, end_ts)
+        query = Usage.query.join(snapshots).\
+            filter(Usage.owner_id == self.id).\
+            order_by(Usage.filesystem_id, snapshots.c.ts).\
+            with_entities(Usage.filesystem_id,
+                          snapshots.c.ts,
+                          Usage.soft,
+                          Usage.hard,
+                          Usage.usage)
+
+        fields = ['ts', 'host', 'soft', 'hard', 'usage']
+        file_systems = self._get_file_systems()
+        rslt = {}
+
+        for q in query.all():
+            hn, fn = file_systems[q[0]]
+            mappings = (q[1], hn, q[2], q[3], q[4])
+            if fn not in rslt:
+                rslt[fn] = []
+            rslt[fn].append(dict(zip(fields, mappings)))
+        return rslt
 
 
 class Host(db.Model):
@@ -126,7 +154,25 @@ class Filesystem(db.Model):
                           func.max(Usage.soft).label('soft'),
                           func.max(Usage.hard).label('hard'),
                           func.max(Usage.usage).label('usage'))
+
         fields = ['owner', 'soft', 'hard', 'usage']
+        return [dict(zip(fields, q)) for q in query.all()]
+
+    def list(self, start_ts=0, end_ts=0):
+        """"Gets usages between start_ts and end_ts.
+        """
+        snapshots = Snapshot.between(start_ts, end_ts)
+        query = Usage.query.join(snapshots).\
+            filter(Usage.filesystem_id == self.id).\
+            join(Owner).\
+            order_by(snapshots.c.ts).\
+            with_entities(snapshots.c.ts,
+                          Owner.name,
+                          Usage.soft,
+                          Usage.hard,
+                          Usage.usage)
+
+        fields = ['ts', 'owner', 'soft', 'hard', 'usage']
         return [dict(zip(fields, q)) for q in query.all()]
 
 

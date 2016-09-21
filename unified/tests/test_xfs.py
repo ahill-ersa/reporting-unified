@@ -17,7 +17,7 @@ class XFSTestCase(unittest.TestCase):
             rule = route.rule
             # top objects' have pattern of /blar
             # ingest only accept PUT and OPTIONS
-            if rule not in ('/static/<path:filename>', '/ingest', '/usage/summary', '/filesystem/<id>/summary'):
+            if rule not in ('/static/<path:filename>', '/ingest') and 'summary' not in rule and 'list' not in rule:
                 print('Testing %s' % rule)
                 resp = get('%s?count=10' % rule)
                 data = json.loads(resp.data)
@@ -45,17 +45,22 @@ class XFSTestCase(unittest.TestCase):
         self.assertTrue(isinstance(data, list))
         print(data)
 
-    def test_filesystem(self):
-        resp = get('/filesystem?count=1')
-        self.assertEqual(resp.status_code, 200)
-        data = json.loads(resp.data)
-        self.assertTrue(isinstance(data, list))
-        self.assertGreater(len(data), 0)
-        print(data)
+    def test_instance_methods(self):
+        instance_types = ('filesystem', 'owner')
+        methods = ('summary', 'list')
+        for itype in instance_types:
+            resp = get('/%s?count=1' % itype)
+            self.assertEqual(resp.status_code, 200)
+            data = json.loads(resp.data)
+            print(data)
+            self.assertTrue(isinstance(data, list))
+            self.assertGreater(len(data), 0)
+            target_id = data[0]['id']
 
-        resp = get('/filesystem/%s/summary' % data[0]['id'])
-        self.assertEqual(resp.status_code, 200)
-        data = json.loads(resp.data)
-        self.assertTrue(isinstance(data, list))
-        self.assertGreater(len(data), 0)
-        print(data)
+            for method in methods:
+                resp = get('/%s/%s/%s?start=%s&end=%s' % (itype, target_id, method, now_minus_24hrs, now))
+                self.assertEqual(resp.status_code, 200)
+                data = json.loads(resp.data)
+                print(data)
+                self.assertTrue(isinstance(data, list) or isinstance(data, dict))
+                self.assertGreater(len(data), 0)

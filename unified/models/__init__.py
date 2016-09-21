@@ -1,6 +1,7 @@
 import re
 
 from sqlalchemy.sql import text
+from sqlalchemy.orm import load_only
 from sqlalchemy.dialects.postgresql import UUID
 
 from .. import app, db
@@ -59,3 +60,16 @@ class SnapshotMothods(object):
         if end_ts > 0:
             id_query = id_query.filter(cls.ts < end_ts)
         return id_query.with_entities(cls.id).subquery()
+
+    @classmethod
+    def between(cls, start_ts=0, end_ts=0):
+        """"Gets snapshop id and timestamps between start_ts and end_ts.
+
+        It returns a subquery not actual values.
+        """
+        btw_query = cls.query
+        if start_ts > 0:
+            btw_query = btw_query.filter(cls.ts >= start_ts)
+        if end_ts > 0:
+            btw_query = btw_query.filter(cls.ts < end_ts)
+        return btw_query.options(load_only("id", "ts")).subquery()

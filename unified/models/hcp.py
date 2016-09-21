@@ -32,6 +32,15 @@ class Tenant(db.Model):
     namespaces = db.relationship("Namespace", backref="tenant")
     allocation_id = db.Column(None, db.ForeignKey("allocation.id"))
 
+    def _get_namespaces(self):
+        """Get a dict with namespace id as keys and host and namespace name as values"""
+        if not hasattr(self, '_ns_dict'):
+            self._ns_dict = dict(
+                Namespace.query.filter(Namespace.tenant_id == self.id).
+                with_entities(Namespace.id, Namespace.name).all())
+
+        return self._ns_dict
+
     def json(self):
         """JSON"""
         return to_dict(self, ["name", "allocation_id"])
@@ -43,9 +52,7 @@ class Tenant(db.Model):
         """
         id_query = Snapshot.id_between(start_ts, end_ts)
 
-        namespaces = dict(
-            Namespace.query.filter(Namespace.tenant_id == self.id).
-            with_entities(Namespace.id, Namespace.name).all())
+        namespaces = self._get_namespaces()
         namespace_ids = namespaces.keys()
 
         query = Usage.query.filter(Usage.snapshot_id.in_(id_query)).\
@@ -77,6 +84,44 @@ class Tenant(db.Model):
             rslt.append(dict(zip(fields, mappings)))
         return rslt
 
+    def list(self, start_ts=0, end_ts=0):
+        """"Gets a list of usages of a tenant between start_ts and end_ts.
+        """
+        snapshots = Snapshot.between(start_ts, end_ts)
+        namespaces = self._get_namespaces()
+        namespace_ids = namespaces.keys()
+
+        query = Usage.query.join(snapshots).\
+            filter(Usage.namespace_id.in_(namespace_ids)).\
+            order_by(Usage.namespace_id, snapshots.c.ts).\
+            with_entities(Usage.namespace_id,
+                          snapshots.c.ts,
+                          Usage.ingested_bytes,
+                          Usage.raw_bytes,
+                          Usage.reads,
+                          Usage.writes,
+                          Usage.deletes,
+                          Usage.objects,
+                          Usage.bytes_in,
+                          Usage.bytes_out,
+                          Usage.metadata_only_objects,
+                          Usage.metadata_only_bytes,
+                          Usage.tiered_objects,
+                          Usage.tiered_bytes)
+
+        fields = ['ts', 'ingested_bytes', 'raw_bytes', 'reads',
+                  'writes', 'deletes', 'objects', 'bytes_in', 'bytes_out',
+                  'metadata_only_objects', 'metadata_only_bytes',
+                  'tiered_objects', 'tiered_bytes']
+        rslt = {}
+
+        for q in query.all():
+            ns = namespaces[q[0]]
+            if ns not in rslt:
+                rslt[ns] = []
+            rslt[ns].append(dict(zip(fields, q[1:])))
+        return rslt
+
 
 class Namespace(db.Model):
     """HCP Namespace"""
@@ -92,6 +137,38 @@ class Namespace(db.Model):
     def json(self):
         """JSON"""
         return to_dict(self, ["name", "tenant_id", "allocation_id"])
+
+    def list(self, start_ts=0, end_ts=0):
+        """"Gets a list of usages of a namespace between start_ts and end_ts.
+        """
+        snapshots = Snapshot.between(start_ts, end_ts)
+
+        query = Usage.query.join(snapshots).\
+            filter(Usage.namespace_id == self.id).\
+            order_by(snapshots.c.ts).\
+            with_entities(snapshots.c.ts,
+                          Usage.ingested_bytes,
+                          Usage.raw_bytes,
+                          Usage.reads,
+                          Usage.writes,
+                          Usage.deletes,
+                          Usage.objects,
+                          Usage.bytes_in,
+                          Usage.bytes_out,
+                          Usage.metadata_only_objects,
+                          Usage.metadata_only_bytes,
+                          Usage.tiered_objects,
+                          Usage.tiered_bytes)
+
+        fields = ['ts', 'ingested_bytes', 'raw_bytes', 'reads',
+                  'writes', 'deletes', 'objects', 'bytes_in', 'bytes_out',
+                  'metadata_only_objects', 'metadata_only_bytes',
+                  'tiered_objects', 'tiered_bytes']
+        rslt = []
+
+        for q in query.all():
+            rslt.append(dict(zip(fields, q)))
+        return rslt
 
 
 class Usage(db.Model):

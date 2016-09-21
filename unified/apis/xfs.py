@@ -2,7 +2,7 @@ import io
 import uuid
 from functools import lru_cache
 
-from . import app, configure, request
+from . import app, configure, request, instance_method
 from . import db, get_or_create, commit
 from . import QueryResource, BaseIngestResource, RangeQuery
 
@@ -98,16 +98,34 @@ class UsageSummary(RangeQuery):
 
 class FilesystemSummary(RangeQuery):
     def _get(self, id='', **kwargs):
-        try:
-            uuid.UUID(id)
-        except:
-            return []
+        return instance_method(Filesystem, 'summarise', id,
+                               default=[],
+                               start_ts=kwargs['start'],
+                               end_ts=kwargs['end'])
 
-        rslt = []
-        fs = Filesystem.query.get(id)
-        if fs:
-            rslt = fs.summarise(start_ts=kwargs['start'], end_ts=kwargs['end'])
-        return rslt
+
+class FilesystemList(RangeQuery):
+    def _get(self, id='', **kwargs):
+        return instance_method(Filesystem, 'list', id,
+                               default=[],
+                               start_ts=kwargs['start'],
+                               end_ts=kwargs['end'])
+
+
+class OwnerSummary(RangeQuery):
+    def _get(self, id='', **kwargs):
+        return instance_method(Owner, 'summarise', id,
+                               default=[],
+                               start_ts=kwargs['start'],
+                               end_ts=kwargs['end'])
+
+
+class OwnerList(RangeQuery):
+    def _get(self, id='', **kwargs):
+        return instance_method(Owner, 'list', id,
+                               default=[],
+                               start_ts=kwargs['start'],
+                               end_ts=kwargs['end'])
 
 
 def setup():
@@ -117,7 +135,10 @@ def setup():
         "/host": HostResource,
         "/filesystem": FilesystemResource,
         "/filesystem/<id>/summary": FilesystemSummary,
+        "/filesystem/<id>/list": FilesystemList,
         "/owner": OwnerResource,
+        "/owner/<id>/summary": OwnerSummary,
+        "/owner/<id>/list": OwnerList,
         "/usage": UsageResource,
         "/usage/summary": UsageSummary,
         "/ingest": IngestResource

@@ -62,49 +62,24 @@ class Filesystem(db.Model):
             fields = ['capacity', 'free', 'live_usage', 'snapshot_usage']
             return dict(zip(fields, values))
 
-
-class VirtualVolume(db.Model):
-    """Virtual Volume"""
-    id = id_column()
-    name = db.Column(db.String(256), unique=True, nullable=False)
-    usage = db.relationship("VirtualVolumeUsage", backref="virtual_volume")
-    filesystem_id = db.Column(None,
-                              db.ForeignKey("filesystem.id"),
-                              index=True,
-                              nullable=False)
-
-    def json(self):
-        """JSON"""
-        return to_dict(self, ["name", "filesystem_id"])
-
-    def summarise(self, start_ts=0, end_ts=0):
-        """"Gets usage of a virtual volume between start_ts and end_ts.
-
-        Maximal usage of the period is returned.
+    def list(self, start_ts=0, end_ts=0):
+        """"Gets a list of usages of a filesystem between start_ts and end_ts.
         """
-        snapshot_ids = Snapshot.id_between(start_ts, end_ts)
-        id_query = VirtualVolumeUsage.query.\
-            filter(VirtualVolumeUsage.virtual_volume_id == self.id).\
-            filter(VirtualVolumeUsage.snapshot_id.in_(snapshot_ids)).\
-            with_entities(VirtualVolumeUsage.id)
+        snapshots = Snapshot.between(start_ts, end_ts)
+        query = FilesystemUsage.query.join(snapshots).\
+            filter(FilesystemUsage.filesystem_id == self.id).\
+            order_by(snapshots.c.ts).\
+            with_entities(snapshots.c.ts,
+                          FilesystemUsage.capacity,
+                          FilesystemUsage.free,
+                          FilesystemUsage.live_usage,
+                          FilesystemUsage.snapshot_usage)
 
-        query = VirtualVolumeUsage.query.\
-            filter(VirtualVolumeUsage.id.in_(id_query)).\
-            group_by(VirtualVolumeUsage.owner_id).\
-            with_entities(VirtualVolumeUsage.owner_id,
-                          func.max(VirtualVolumeUsage.quota),
-                          func.max(VirtualVolumeUsage.files),
-                          func.max(VirtualVolumeUsage.usage))
-
-        fields = ['owner', 'quota', 'files', 'usage']
+        fields = ['ts', 'capacity', 'free', 'live_usage', 'snapshot_usage']
         rslt = []
 
         for q in query.all():
-            values = list(q)
-            # almost all usages has no owner, query owner directly if needed
-            if values[0]:
-                values[0] = Owner.query.get(q[0]).name
-            rslt.append(dict(zip(fields, values)))
+            rslt.append(dict(zip(fields, q)))
         return rslt
 
 
@@ -153,6 +128,77 @@ class FilesystemUsage(db.Model):
         for q in query.all():
             mappings = (file_systems[q[0]], q[1], q[2], q[3], q[4])
             rslt.append(dict(zip(fields, mappings)))
+        return rslt
+
+
+class VirtualVolume(db.Model):
+    """Virtual Volume"""
+    id = id_column()
+    name = db.Column(db.String(256), unique=True, nullable=False)
+    usage = db.relationship("VirtualVolumeUsage", backref="virtual_volume")
+    filesystem_id = db.Column(None,
+                              db.ForeignKey("filesystem.id"),
+                              index=True,
+                              nullable=False)
+
+    def json(self):
+        """JSON"""
+        return to_dict(self, ["name", "filesystem_id"])
+
+    def summarise(self, start_ts=0, end_ts=0):
+        """"Gets usage of a virtual volume between start_ts and end_ts.
+
+        Maximal usage of the period is returned.
+        """
+        snapshot_ids = Snapshot.id_between(start_ts, end_ts)
+        id_query = VirtualVolumeUsage.query.\
+            filter(VirtualVolumeUsage.virtual_volume_id == self.id).\
+            filter(VirtualVolumeUsage.snapshot_id.in_(snapshot_ids)).\
+            with_entities(VirtualVolumeUsage.id)
+
+        query = VirtualVolumeUsage.query.\
+            filter(VirtualVolumeUsage.id.in_(id_query)).\
+            group_by(VirtualVolumeUsage.owner_id).\
+            with_entities(VirtualVolumeUsage.owner_id,
+                          func.max(VirtualVolumeUsage.quota),
+                          func.max(VirtualVolumeUsage.files),
+                          func.max(VirtualVolumeUsage.usage))
+
+        fields = ['owner', 'quota', 'files', 'usage']
+        rslt = []
+
+        for q in query.all():
+            values = list(q)
+            # almost all usages has no owner, query owner directly if needed
+            if values[0]:
+                values[0] = Owner.query.get(q[0]).name
+            rslt.append(dict(zip(fields, values)))
+        return rslt
+
+    def list(self, start_ts=0, end_ts=0):
+        """"Gets a list of usages of a virtual volume between start_ts and end_ts.
+        """
+        snapshots = Snapshot.between(start_ts, end_ts)
+        query = VirtualVolumeUsage.query.join(snapshots).\
+            filter(VirtualVolumeUsage.virtual_volume_id == self.id).\
+            order_by(VirtualVolumeUsage.owner_id, snapshots.c.ts).\
+            with_entities(VirtualVolumeUsage.owner_id,
+                          snapshots.c.ts,
+                          VirtualVolumeUsage.quota,
+                          VirtualVolumeUsage.files,
+                          VirtualVolumeUsage.usage)
+
+        fields = ['ts', 'quota', 'files', 'usage']
+        rslt = {}
+
+        for q in query.all():
+            if q[0]:
+                owner = Owner.query.get(q[0]).name
+            else:
+                owner = 'UNKNOWN'  # no owner
+            if owner not in rslt:
+                rslt[owner] = []
+            rslt[owner].append(dict(zip(fields, q[1:])))
         return rslt
 
 

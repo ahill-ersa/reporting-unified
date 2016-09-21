@@ -4,7 +4,7 @@ import arrow
 
 from functools import lru_cache
 
-from . import app, configure, request
+from . import app, configure, request, instance_method
 from . import get_or_create, commit, add
 from . import QueryResource, BaseIngestResource, RangeQuery
 
@@ -27,20 +27,28 @@ class TenantResource(QueryResource):
 
 class TenantSummary(RangeQuery):
     def _get(self, id='', **kwargs):
-        rslt = []
-        try:
-            uuid.UUID(id)
-        except:
-            return rslt
+        return instance_method(Tenant, 'summarise', id,
+                               start_ts=kwargs['start'],
+                               end_ts=kwargs['end'])
 
-        tenant = Tenant.query.get(id)
-        if tenant:
-            rslt = tenant.summarise(start_ts=kwargs['start'], end_ts=kwargs['end'])
-        return rslt
+
+class TenantList(RangeQuery):
+    def _get(self, id='', **kwargs):
+        return instance_method(Tenant, 'list', id,
+                               default={},
+                               start_ts=kwargs['start'],
+                               end_ts=kwargs['end'])
 
 
 class NamespaceResource(QueryResource):
     query_class = Namespace
+
+
+class NamespaceList(RangeQuery):
+    def _get(self, id='', **kwargs):
+        return instance_method(Namespace, 'list', id,
+                               start_ts=kwargs['start'],
+                               end_ts=kwargs['end'])
 
 
 class UsageResource(QueryResource):
@@ -167,7 +175,9 @@ def setup():
         "/allocation": AllocationResource,
         "/tenant": TenantResource,
         "/tenant/<id>/summary": TenantSummary,
+        "/tenant/<id>/list": TenantList,
         "/namespace": NamespaceResource,
+        "/namespace/<id>/list": NamespaceList,
         "/usage": UsageResource,
         "/usage/summary": UsageSummary,
         "/ingest": IngestResource

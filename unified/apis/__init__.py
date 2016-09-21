@@ -89,6 +89,15 @@ def identifier(content):
     return str(uuid.uuid5(UUID_NAMESPACE, str(content)))
 
 
+def is_uuid(id):
+    """Verify if a string is an UUID"""
+    try:
+        v = uuid.UUID(id)
+    except:
+        v = None
+    return isinstance(v, uuid.UUID)
+
+
 def github(deps):
     """
     Format GitHub dependencies. For example:
@@ -258,6 +267,19 @@ def do_query(model):
     query = query.order_by(*order)
     # execute
     return query.paginate(args["page"], per_page=args["count"], error_out=False).items
+
+
+def instance_method(model, method, id, default=[], **kwargs):
+    """Get an instance by an id and call the given method of the instance"""
+    if not (is_uuid(id) and hasattr(model, method)):
+        return default
+
+    rslt = default
+    instance = model.query.get(id)
+    if instance:
+        imethod = getattr(instance, method)
+        rslt = imethod(**kwargs)
+    return rslt
 
 
 class QueryResource(Resource):

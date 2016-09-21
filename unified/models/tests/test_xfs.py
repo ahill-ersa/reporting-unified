@@ -18,6 +18,12 @@ class FilesystemTestCase(unittest.TestCase):
         rslt = self.fs.summarise(now_minus_24hrs, now)
         self.assertGreaterEqual(len(rslt), 0)
 
+    def test_list_now_minus_24hrs(self):
+        rslt = self.fs.list(now_minus_24hrs, now)
+        for rs in rslt:
+            print(rs)
+        self.assertGreaterEqual(len(rslt), 0)
+
 
 class UsageSummaryTestCase(unittest.TestCase):
     def test_now(self):
@@ -29,9 +35,20 @@ class UsageSummaryTestCase(unittest.TestCase):
         self.assertGreaterEqual(len(rslt), 0)
 
 
-class OwnerSummaryTestCase(unittest.TestCase):
+class OwnerTestCase(unittest.TestCase):
     def setUp(self):
         self.owners = Owner.query.limit(10)
+
+    def test_file_systems(self):
+        old = None
+        for owner in self.owners:
+            fs = owner._get_file_systems()
+            self.assertTrue(isinstance(fs, dict))
+            self.assertGreaterEqual(len(fs.keys()), 0)
+            if old:
+                self.assertEqual(old, fs)
+            else:
+                old = fs
 
     def test_now(self):
         for owner in self.owners:
@@ -70,3 +87,10 @@ class OwnerSummaryTestCase(unittest.TestCase):
             # print(rslt)
             end = time.time()
             print('Run time count: %f seconds' % (end - start))
+
+    def test_list_now_minus_24hrs(self):
+        for owner in self.owners:
+            print(owner.name)
+            rslt = owner.list(now_minus_24hrs, now)
+            self.assertTrue(isinstance(rslt, dict))
+            print(rslt)

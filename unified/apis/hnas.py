@@ -1,7 +1,7 @@
 import uuid
 from functools import lru_cache
 
-from . import app, configure, request
+from . import app, configure, request, instance_method
 from . import add, get_or_create, commit
 from . import QueryResource, BaseIngestResource, RangeQuery
 
@@ -23,16 +23,17 @@ class FilesystemResource(QueryResource):
 
 class FilesystemSummary(RangeQuery):
     def _get(self, id='', **kwargs):
-        try:
-            uuid.UUID(id)
-        except:
-            return {}
+        return instance_method(Filesystem, 'summarise', id,
+                               default={},
+                               start_ts=kwargs['start'],
+                               end_ts=kwargs['end'])
 
-        rslt = {}
-        fs = Filesystem.query.get(id)
-        if fs:
-            rslt = fs.summarise(start_ts=kwargs['start'], end_ts=kwargs['end'])
-        return rslt
+
+class FilesystemList(RangeQuery):
+    def _get(self, id='', **kwargs):
+        return instance_method(Filesystem, 'list', id,
+                               start_ts=kwargs['start'],
+                               end_ts=kwargs['end'])
 
 
 class VirtualVolumeResource(QueryResource):
@@ -41,16 +42,16 @@ class VirtualVolumeResource(QueryResource):
 
 class VirtualVolumeSummary(RangeQuery):
     def _get(self, id='', **kwargs):
-        try:
-            uuid.UUID(id)
-        except:
-            return []
+        return instance_method(VirtualVolume, 'summarise', id,
+                               start_ts=kwargs['start'],
+                               end_ts=kwargs['end'])
 
-        rslt = []
-        vv = VirtualVolume.query.get(id)
-        if vv:
-            rslt = vv.summarise(start_ts=kwargs['start'], end_ts=kwargs['end'])
-        return rslt
+
+class VirtualVolumeList(RangeQuery):
+    def _get(self, id='', **kwargs):
+        return instance_method(VirtualVolume, 'list', id,
+                               start_ts=kwargs['start'],
+                               end_ts=kwargs['end'])
 
 
 class FilesystemUsageResource(QueryResource):
@@ -138,8 +139,10 @@ def setup():
         "/snapshot": SnapshotResource,
         "/filesystem": FilesystemResource,
         "/filesystem/<id>/summary": FilesystemSummary,
+        "/filesystem/<id>/list": FilesystemList,
         "/virtual-volume": VirtualVolumeResource,
         "/virtual-volume/<id>/summary": VirtualVolumeSummary,
+        "/virtual-volume/<id>/list": VirtualVolumeList,
         "/filesystem/usage": FilesystemUsageResource,
         "/filesystem/usage/summary": FilesystemUsageSummary,
         "/virtual-volume/usage": VirtualVolumeUsageResource,
