@@ -64,7 +64,7 @@ WantedBy=sockets.target
 EOF
 
 cat > /etc/nginx/conf.d/$package.conf <<EOF
-proxy_cache_path /var/cache/nginx/$package levels=1:2 keys_zone=cache_xfs:10m max_size=1g inactive=60m use_temp_path=off;
+proxy_cache_path /var/cache/nginx/$package levels=1:2 keys_zone=cache_$package:10m max_size=1g inactive=60m use_temp_path=off;
 server {
     listen 80;
     server_name ${package}-dev.reporting.ersa.edu.au;
@@ -86,7 +86,7 @@ location /$package {
     proxy_redirect off;
     proxy_set_header X-Real-IP \$remote_addr;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-    proxy_cache cache_xfs;
+    proxy_cache cache_$package;
     proxy_cache_valid 200 60m;
     add_header X-Proxy-Cache \$upstream_cache_status;
 }
