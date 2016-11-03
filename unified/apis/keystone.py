@@ -1,19 +1,14 @@
-"""Application and persistence management."""
-
-# pylint: disable=no-member, import-error, no-init, too-few-public-methods
-# pylint: disable=cyclic-import, no-name-in-module, invalid-name
-
 from functools import lru_cache
 
-from ersa_reporting import configure, get_or_create
-from ersa_reporting import record_input, commit, app, request
-from ersa_reporting import require_auth, Resource, QueryResource
-from ersa_reporting import BaseIngestResource
+from . import app, configure, request
+from . import get_or_create, commit
+from . import QueryResource, BaseIngestResource
 
 from nectar import get_domain
-from .models.keystone import *
+from ..models.keystone import (
+    Snapshot, Account, Tenant, Domain, Membership,
+    AccountReference, AccountReferenceMapping)
 
-# API
 
 class AccountResource(QueryResource):
     """Account"""

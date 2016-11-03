@@ -128,16 +128,22 @@ class Ingester:
         names = []
 
         while True:
-            url = "%s/input?page=%s" % (self.endpoint, page)
+            url = "%s/input?count=5000&page=%s" % (self.endpoint, page)
             batch = requests.get(url, headers={"x-ersa-auth-token": self.token})
+            # This is for back compatibility
             if batch.status_code == 404:
                 break
             elif batch.status_code != 200:
                 raise IOError("HTTP %s" % batch.status_code)
 
-            names += [item["name"] for item in batch.json()]
-            logger.debug("%d page loaded" % page)
-            page += 1
+            # batch.status_code == 200 but with empty result
+            records = batch.json()
+            if len(records) > 0:
+                names += [item["name"] for item in batch.json()]
+                logger.debug("%d page loaded" % page)
+                page += 1
+            else:
+                break
 
         return names
 

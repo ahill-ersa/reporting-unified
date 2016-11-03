@@ -1,28 +1,22 @@
-#!/usr/bin/env python3
-"""Base Flask"""
-
-# pylint: disable=no-init, too-few-public-methods, no-self-use
-
-import re
 import uuid
-
-from functools import wraps
-
 import requests
+
 import logging
 import logging.handlers
 
-from flask import Flask, request
-
-from flask_cors import CORS
-
 import flask_restful
-from flask_restful import Resource, reqparse
 
-from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy.sql import text
-from sqlalchemy.dialects.postgresql import UUID
+from functools import wraps
+from flask import request
+from flask_cors import CORS
+from flask_restful import Resource, reqparse
 from sqlalchemy.orm.relationships import RelationshipProperty
+
+from .. import db, app
+from ..models import Input
+
+restapi = flask_restful.Api(app)
+cors = CORS(app)
 
 QUERY_PARSER = reqparse.RequestParser()
 QUERY_PARSER.add_argument("filter", action="append", help="Filter")
@@ -33,20 +27,23 @@ QUERY_PARSER.add_argument("count",
                           default=1000,
                           help="Items per page")
 
+# All defalut time range arguments
+RANGE_PARSER = reqparse.RequestParser()
+RANGE_PARSER.add_argument("start", type=int, default=0)
+RANGE_PARSER.add_argument("end", type=int, default=0)
+
 INPUT_PARSER = reqparse.RequestParser()
 INPUT_PARSER.add_argument("name", location="args", required=True)
 
-app = Flask("app")
-app.config.from_object('config')
 
-PACKAGE = app.config["ERSA_REPORTING_PACKAGE"]
+PACKAGE = ''
+if "ERSA_REPORTING_PACKAGE" in app.config:
+    PACKAGE = app.config["ERSA_REPORTING_PACKAGE"]
 
-STRIP_ID = re.compile("_id$")
 
-# TODO: to remove
-# REQUIRED_ENVIRONMENT = ["ERSA_BIND", "ERSA_DATABASE_URI"]
-
-AUTH_TOKEN = app.config["ERSA_AUTH_TOKEN"]
+AUTH_TOKEN = None
+if "ERSA_AUTH_TOKEN" in app.config:
+    AUTH_TOKEN = app.config["ERSA_AUTH_TOKEN"]
 if AUTH_TOKEN is not None:
     AUTH_TOKEN = AUTH_TOKEN.lower()
 
@@ -67,6 +64,10 @@ if "LOG_SIZE" in app.config:
 else:
     LOG_SIZE = 30000000
 
+LOG_FORMAT = '%(asctime)s %(levelname)s %(module)s %(filename)s %(lineno)d: %(message)s'
+SAN_MS_DATE = '%Y-%m-%d %H:%M:%S'
+LOG_FORMATTER = logging.Formatter(LOG_FORMAT, SAN_MS_DATE)
+
 top_logger = logging.getLogger(__name__)
 
 
@@ -75,7 +76,7 @@ top_logger = logging.getLogger(__name__)
 def create_logger(module_name):
     log_name = "%s/%s.log" % (LOG_DIR, module_name)
     file_handler = logging.handlers.RotatingFileHandler(log_name, maxBytes=LOG_SIZE)
-    file_handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s: %(message)s'))
+    file_handler.setFormatter(LOG_FORMATTER)
     logger = logging.getLogger(__name__)
     logger.addHandler(file_handler)
     logger.setLevel(LOG_LEVEL)
@@ -83,28 +84,18 @@ def create_logger(module_name):
     return logger
 
 
-def get_db_binding(package):
-    """Get db binding for a package. Default is None. Argument is __name__"""
-    db_binding = None
-    if app.config["SQLALCHEMY_BINDS"]:
-        MOD = package.split(".")[-1]
-        if MOD in app.config["SQLALCHEMY_BINDS"]:
-            db_binding = MOD
-    return db_binding
-
-
-# Stop SQLAlchemy complaining, re: "SQLALCHEMY_TRACK_MODIFICATIONS adds
-# significant overhead and will be disabled by default in the future."
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-
-cors = CORS(app)
-restapi = flask_restful.Api(app)
-db = SQLAlchemy(app)
-
-
 def identifier(content):
     """A generator for consistent IDs."""
     return str(uuid.uuid5(UUID_NAMESPACE, str(content)))
+
+
+def is_uuid(id):
+    """Verify if a string is an UUID"""
+    try:
+        v = uuid.UUID(id)
+    except:
+        v = None
+    return isinstance(v, uuid.UUID)
 
 
 def github(deps):
@@ -222,23 +213,6 @@ def require_auth(func):
     return decorated
 
 
-def id_column():
-    """Generate a UUID column."""
-    return db.Column(UUID,
-                     server_default=text("uuid_generate_v4()"),
-                     primary_key=True)
-
-
-def to_dict(object, fields):
-    """Generate dictionary with specified fields."""
-    output = {}
-    fields = set(["id"] + (fields if fields is not None else []))
-    for name in fields:
-        if hasattr(object, name):
-            output[STRIP_ID.sub("", name)] = getattr(object, name)
-    return output
-
-
 def dynamic_query(model, query, expression):
     """
     Construct query based on:
@@ -295,10 +269,17 @@ def do_query(model):
     return query.paginate(args["page"], per_page=args["count"], error_out=False).items
 
 
-def record_input():
-    """Record the name of an ingestion."""
-    args = INPUT_PARSER.parse_args()
-    add(Input(name=args["name"]))
+def instance_method(model, method, id, default=[], **kwargs):
+    """Get an instance by an id and call the given method of the instance"""
+    if not (is_uuid(id) and hasattr(model, method)):
+        return default
+
+    rslt = default
+    instance = model.query.get(id)
+    if instance:
+        imethod = getattr(instance, method)
+        rslt = imethod(**kwargs)
+    return rslt
 
 
 class QueryResource(Resource):
@@ -323,6 +304,38 @@ class QueryResource(Resource):
         return self.get()
 
 
+class RangeQuery(Resource):
+    """Query with time range in arguments for filtering.
+
+       This is the base of the queries on collections. It parses two optional
+       arguments in request: start and end, both are timestamps. QueryResource
+       inherits it can modify the parser to make them required and add more
+       arguments. Typical use of it is to get a collection filtered by snapshot
+       between start and end timestamps. In the return all linked objects
+       are populated with necessary attributes either in a list or an object (dict).
+
+       Use QueryResource for filtering snapshots or other simple collections.
+    """
+    default = []
+    arg_parser = RANGE_PARSER
+
+    @require_auth
+    def get(self, **kwargs):
+        """Get method"""
+        kwargs.update(self.arg_parser.parse_args())
+        try:
+            return self._get(**kwargs)
+        except Exception as e:
+            top_logger.error("Query of summary failed. Detail: %s" % str(e))
+            return self.default
+
+
+def record_input():
+    """Record the name of an ingestion."""
+    args = INPUT_PARSER.parse_args()
+    add(Input(name=args["name"]))
+
+
 class BaseIngestResource(Resource):
     """Base Ingestion"""
 
@@ -330,16 +343,6 @@ class BaseIngestResource(Resource):
     def put(self):
         record_input()
         return self.ingest()
-
-
-class Input(db.Model):
-    """Input"""
-    id = id_column()
-    name = db.Column(db.String(256), nullable=False, unique=True)
-
-    def json(self):
-        """Jsonify"""
-        return {"id": self.id, "name": self.name}
 
 
 class InputResource(QueryResource):

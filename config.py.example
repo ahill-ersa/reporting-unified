@@ -1,0 +1,21 @@
+import logging
+
+# Tell Flask to send more information
+DEBUG = True
+# Stop Stop SQLAlchemy complaining
+SQLALCHEMY_TRACK_MODIFICATIONS = False
+
+# Essential
+SQLALCHEMY_DATABASE_URI = "postgresql://usagename:password@db_server/db"
+ERSA_REPORTING_PACKAGE = "API package name"
+ERSA_AUTH_TOKEN = "DEBUG_TOKEN"
+
+# Optional
+LOG_DIR = "."
+LOG_LEVEL = logging.DEBUG
+LOG_SIZE = 30000000
+# 20160720: support from flask-sqlalchemy of SQLALCHEMY_BINDS is questionable,
+# you may need patch your flask-sqlalchemy to allow multiple databases
+SQLALCHEMY_BINDS = {
+    "ANOTHER_DIND": "postgresql://apiuser:YOUR_PASS@localhost/YOUR_ANOTHER_DB"
+}

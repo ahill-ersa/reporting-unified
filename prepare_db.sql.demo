@@ -1,0 +1,10 @@
+--sudo -u postgres psql -f prepare_db.sql
+
+CREATE USER apiuser WITH ENCRYPTED PASSWORD 'SOME_PASSWORD';
+CREATE DATABASE YOUR_DB OWNER apiuser;
+
+\c YOUR_DB
+CREATE EXTENSION if not exists "uuid-ossp";
+
+--If needed, drop it
+--DROP DATABASE YOUR_DB;

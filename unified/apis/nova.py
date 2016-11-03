@@ -1,36 +1,29 @@
-"""Application and persistence management."""
-
-# pylint: disable=no-member, import-error, no-init, too-few-public-methods
-# pylint: disable=cyclic-import, no-name-in-module, invalid-name
-
+import uuid
 from functools import lru_cache
 
 from werkzeug.exceptions import NotFound
 
 from flask_restful import reqparse
 from flask_sqlalchemy import BaseQuery
-from sqlalchemy.dialects.postgresql import INET, MACADDR
-from sqlalchemy import distinct, desc
-from sqlalchemy.sql import func
 
-from ersa_reporting import db, id_column, configure
-from ersa_reporting import get_or_create, commit, app
-from ersa_reporting import add, delete, request, require_auth
-from ersa_reporting import Resource, QueryResource, record_input
-from ersa_reporting import BaseIngestResource
-from ersa_reporting import create_logger
-from ersa_reporting import QUERY_PARSER
+from . import create_logger
+from . import app, configure, request, require_auth
+from . import db, get_or_create, add, commit, QUERY_PARSER, RANGE_PARSER
+from . import QueryResource, BaseIngestResource, RangeQuery
 
-from .models.nova import *
+from ..models.nova import (
+    Snapshot, Image, Flavor, Hypervisor, AvailabilityZone, Tenant, Account,
+    Instance, InstanceStatus, InstanceState, Summary,
+    IPAddress, MACAddress, IPAddressMapping, MACAddressMapping
+)
 
 logger = create_logger(__name__)
-
-# Endpoints
 
 
 class SnapshotResource(QueryResource):
     """Snapshot Endpoint"""
     query_class = Snapshot
+
 
 class IngestResource(BaseIngestResource):
     def ingest(self):
@@ -155,10 +148,33 @@ class HypervisorResource(QueryResource):
     query_class = Hypervisor
 
 
+class InstanceLatestState(RangeQuery):
+    """ Get the latest full information of an instance
+
+        This includes its internal id, Instnace.openstack_id (server_id),
+        InstanceState.name(server), Hypervisor.name (hypervisor),
+        AvailabilityZone.name (az), Flavor.openstack_id (flavor),
+        Image.openstack_id (image), life span (span), linked
+        Account.openstack_id (account), Tenant.openstack_id (tenant).
+    """
+    def _get(self, id='', **kwargs):
+        try:
+            uuid.UUID(id)
+        except:
+            return {}
+
+        self.default = rslt = {}
+        instance = Instance.query.get(id)
+        rslt = instance.latest_state(start_ts=kwargs['start'], end_ts=kwargs['end'])
+        return rslt
+
+
 class InstanceResource(QueryResource):
     """Instance Endpoint"""
     query_class = Instance
 
+    # TODO: this should be removed after client code has to updated to use InstanceLatestState
+    # this is to support old latest query
     def _latest_state(self):
         """ Get full information of an instance
 
@@ -185,6 +201,7 @@ class InstanceResource(QueryResource):
         else:
             return self._latest_state()
 
+
 class InstanceStatusResource(QueryResource):
     """Instance Status Endpoint"""
     query_class = InstanceStatus
@@ -200,39 +217,38 @@ class InstanceStateResource(QueryResource):
     query_class = InstanceState
 
 
-class SummaryResource(Resource):
+class SummaryResource(RangeQuery):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for arg in self.arg_parser.args:
+            arg.required = True
+        self.arg_parser.add_argument("distinct", type=bool, default=False)
+
     # TODO: consider to remove
     def _query(self, start_ts, end_ts):
         """Build a query to get a list of all instance status and hypervisor bewteen sart and end ts."""
 
         # To use BaseQuery.paginate
         query = BaseQuery([Snapshot, InstanceState, Instance, Hypervisor, Account, Tenant, Flavor], db.session()).\
-                  filter(Snapshot.ts >= start_ts, Snapshot.ts < end_ts).\
-                  filter(InstanceState.snapshot_id == Snapshot.id).\
-                  filter(Instance.id == InstanceState.instance_id).\
-                  filter(InstanceState.hypervisor_id == Hypervisor.id).\
-                  filter(Account.id == Instance.account_id).\
-                  filter(Tenant.id == Instance.tenant_id).\
-                  filter(Flavor.id == Instance.flavor_id).\
-                  with_entities(Snapshot.ts, Instance.openstack_id, InstanceState.name,
-                                Hypervisor.name, Account.openstack_id, Tenant.openstack_id,
-                                Instance.flavor_id)
+            filter(Snapshot.ts >= start_ts, Snapshot.ts < end_ts).\
+            filter(InstanceState.snapshot_id == Snapshot.id).\
+            filter(Instance.id == InstanceState.instance_id).\
+            filter(InstanceState.hypervisor_id == Hypervisor.id).\
+            filter(Account.id == Instance.account_id).\
+            filter(Tenant.id == Instance.tenant_id).\
+            filter(Flavor.id == Instance.flavor_id).\
+            with_entities(Snapshot.ts, Instance.openstack_id, InstanceState.name,
+                          Hypervisor.name, Account.openstack_id, Tenant.openstack_id,
+                          Instance.flavor_id)
         return query
 
-    @require_auth
-    def get(self):
-        parser = reqparse.RequestParser()
-        parser.add_argument("start", type=int, required=True)
-        parser.add_argument("end", type=int, required=True)
-        parser.add_argument("distinct", type=bool, default=False)
-
-        args = parser.parse_args()
+    def _get(self, **kwargs):
         common_args = QUERY_PARSER.parse_args()
 
-        if args["distinct"]:
-            query = Summary(args["start"], args["end"]).query
+        if kwargs["distinct"]:
+            query = Summary(kwargs["start"], kwargs["end"]).query
         else:
-            query = self._query(args["start"], args["end"])
+            query = self._query(kwargs["start"], kwargs["end"])
 
         result = {'total': 0, 'pages': 0, 'items': []}
         try:
@@ -240,13 +256,13 @@ class SummaryResource(Resource):
             result['total'] = qp.total
             result['pages'] = qp.pages
             result['page'] = qp.page
-            if args["distinct"]:
+            if kwargs["distinct"]:
                 result['items'] = [item[0] for item in qp.items]
             else:
-                result['items'] = [{'ts': item[0], 'server_id': item[1], 'server': item[2],
-                                    'hypervisor': item[3], 'account': str(item[4]),
-                                    'tenant': str(item[5]), 'flavor': str(item[6])}
-                                    for item in qp.items]
+                result['items'] = [{
+                    'ts': item[0], 'server_id': item[1], 'server': item[2],
+                    'hypervisor': item[3], 'account': str(item[4]),
+                    'tenant': str(item[5]), 'flavor': str(item[6])} for item in qp.items]
         except NotFound:
             pass
         except Exception as e:
@@ -276,6 +292,7 @@ def setup():
         "/hypervisor": HypervisorResource,
         "/image": ImageResource,
         "/instance": InstanceResource,
+        "/instance/<id>/latest": InstanceLatestState,
         "/instance/status": InstanceStatusResource,
         "/instance/state": InstanceStateResource,
         "/summary": SummaryResource,
